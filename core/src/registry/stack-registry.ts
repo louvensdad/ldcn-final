@@ -6,6 +6,7 @@ export interface StackDefinition {
   strengths: string[];
   tradeoffs: string[];
   runtimeSupport: boolean;
+  architectureAgentKey: string;
 }
 
 export class StackRegistry {
@@ -20,6 +21,7 @@ export class StackRegistry {
       strengths: ['enterprise-grade', 'modular', 'testable', 'ecosystem'],
       tradeoffs: ['ceremony', 'learning curve'],
       runtimeSupport: true,
+      architectureAgentKey: 'architecture.nestjs.architect',
     });
 
     this.register({
@@ -30,6 +32,7 @@ export class StackRegistry {
       strengths: ['full-stack', 'SSR/SSG', 'ecosystem'],
       tradeoffs: ['Vercel coupling', 'complexity for simple apps'],
       runtimeSupport: true,
+      architectureAgentKey: 'architecture.nextjs.architect',
     });
 
     this.register({
@@ -40,6 +43,7 @@ export class StackRegistry {
       strengths: ['component model', 'ecosystem'],
       tradeoffs: ['needs backend separately'],
       runtimeSupport: true,
+      architectureAgentKey: 'architecture.react.architect',
     });
 
     this.register({
@@ -50,6 +54,7 @@ export class StackRegistry {
       strengths: ['fast', 'async', 'great for AI/ML integration'],
       tradeoffs: ['smaller enterprise ecosystem than Java'],
       runtimeSupport: true,
+      architectureAgentKey: 'architecture.fastapi.architect',
     });
 
     this.register({
@@ -60,6 +65,7 @@ export class StackRegistry {
       strengths: ['PyTorch', 'Hugging Face', 'data tools'],
       tradeoffs: ['ops complexity'],
       runtimeSupport: true,
+      architectureAgentKey: 'architecture.ai-python.architect',
     });
 
     this.register({
@@ -70,6 +76,7 @@ export class StackRegistry {
       strengths: ['mature', 'enterprise', 'ecosystem'],
       tradeoffs: ['memory footprint', 'boilerplate'],
       runtimeSupport: true,
+      architectureAgentKey: 'architecture.java.architect',
     });
   }
 

@@ -5,3 +5,6 @@ export * from './solution-topology';
 export * from './solution-proposal';
 export * from './stack-selection';
 export * from './approved-solution';
+export * from './architecture-decision';
+export * from './stack-architecture-proposal';
+export * from './approved-architecture-composition';

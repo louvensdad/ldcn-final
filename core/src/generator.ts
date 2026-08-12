@@ -1,5 +1,7 @@
 import {
+  ApprovedArchitectureComposition,
   ApprovedSolution,
+  DeliveryTargetKind,
   IntentInput,
   ProjectIntent,
   RequirementsContract,
@@ -11,6 +13,8 @@ import {
 import { StackRegistry } from './registry/stack-registry';
 import {
   ApprovedSolutionValidator,
+  ArchitectureComposer,
+  ArchitectureValidator,
   IntentAnalyzer,
   RequirementsIntelligence,
   SolutionPlanner,
@@ -31,6 +35,7 @@ export interface GenerationResult {
   proposal: SolutionProposal;
   selection: StackSelectionProposal;
   approvedSolution: ApprovedSolution;
+  architectureComposition: ApprovedArchitectureComposition;
 }
 
 export class Generator {
@@ -40,6 +45,8 @@ export class Generator {
   private solutionPlanner = new SolutionPlanner();
   private technologySelector = new TechnologySelector();
   private approvedSolutionValidator = new ApprovedSolutionValidator();
+  private architectureComposer = new ArchitectureComposer();
+  private architectureValidator = new ArchitectureValidator();
   private registry = new StackRegistry();
 
   constructor(private config: GeneratorConfig = {}) {}
@@ -51,9 +58,14 @@ export class Generator {
     const contractDraft = this.requirements.buildContract(intent);
     const contract = this.requirements.approve(contractDraft);
 
+    const explicitTargets = this.config.fixedSelections
+      ? (Object.keys(this.config.fixedSelections) as DeliveryTargetKind[])
+      : undefined;
+
     const topologyProposed = this.topologyResolver.resolve({
       contract,
       forbiddenTargets: intent.forbiddenDeliveryTargets,
+      explicitTargets,
     });
     const topology = this.topologyResolver.approve(topologyProposed);
 
@@ -89,6 +101,19 @@ export class Generator {
       kindsRequiringStack,
     });
 
+    const compositionProposal = this.architectureComposer.compose({
+      approvedSolution,
+      contract,
+      registry: this.registry,
+    });
+
+    const architectureComposition = this.architectureValidator.validateAndApprove({
+      missionId: input.missionId,
+      approvedSolutionId: approvedSolution.id,
+      proposals: compositionProposal.proposals,
+      conflicts: compositionProposal.conflicts,
+    });
+
     return {
       intent,
       contract,
@@ -96,6 +121,7 @@ export class Generator {
       proposal,
       selection,
       approvedSolution,
+      architectureComposition,
     };
   }
 }

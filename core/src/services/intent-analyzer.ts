@@ -110,7 +110,12 @@ export class IntentAnalyzer {
     if (idea.includes('rápido') || idea.includes('mvp') || idea.includes('prova de conceito')) {
       needs.push({ value: 'Time-to-market curto', source: 'INFERRED' });
     }
-    if (idea.includes('escalar') || idea.includes('milhões')) {
+    if (
+      idea.includes('escal') ||
+      idea.includes('milhões') ||
+      idea.includes('scale') ||
+      idea.includes('enterprise')
+    ) {
       needs.push({ value: 'Escalabilidade horizontal', source: 'INFERRED' });
     }
     return needs;
@@ -130,7 +135,7 @@ export class IntentAnalyzer {
         impact: 'MEDIUM',
       });
     }
-    if (!idea.includes('escala') && !idea.includes('usuários simultâneos')) {
+    if (!idea.includes('escal') && !idea.includes('usuários simultâneos')) {
       unknowns.push({
         description: 'Qual volume de usuários/dados é esperado?',
         impact: 'LOW',

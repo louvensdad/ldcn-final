@@ -4,3 +4,7 @@ export * from './topology-resolver';
 export * from './solution-planner';
 export * from './technology-selector';
 export * from './approved-solution-validator';
+export * from './stack-architect';
+export * from './architecture-composer';
+export * from './architecture-conflict-detector';
+export * from './architecture-validator';
