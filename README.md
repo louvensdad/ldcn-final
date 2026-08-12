@@ -225,4 +225,9 @@ A empresa completa existe no catálogo. A `ApprovedSolution` define quais depart
 ## 🛠️ Status
 
 - Documentação canônica em evolução no Obsidian vault.
-- **Core de decisão implementado em `core/`** cobrindo Intent → ApprovedSolution com testes passando.
+- **Core de decisão implementado em `core/`** cobrindo:
+  - Intent Understanding → Requirements Intelligence → Solution Topology → Solution Planning → Technology Selection → **ApprovedSolution** (docs 02–09);
+  - **Architecture Composition** (doc 08): `StackArchitect`, `ArchitectureComposer`, `ArchitectureConflictDetector`, `ArchitectureValidator`;
+  - **TeamComposer V2** (doc 10): `TeamComposer` monta a `AgentTeam` por tier de complexidade (LOW/MEDIUM/HIGH), com especialistas condicionais e Integration Unit somente quando há integração real; `TeamValidator` aprova e versiona, aplicando a regra "Reviewer != executor".
+  - 35 testes unitários passando (`npm test`), build TypeScript limpo (`npm run build`).
+- Próximas camadas a implementar seguindo o roadmap do vault: Dynamic Pipeline Composer (11), Job Classification (12), Intelligent Work Router (13), Team Switching e Handoffs (14) — ver [`27 - Slices Prompts Codex e Roadmap.md`](./LDCN_Gerador_Inteligente_Obsidian/27%20-%20Slices%20Prompts%20Codex%20e%20Roadmap.md).

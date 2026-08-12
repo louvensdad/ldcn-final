@@ -1,4 +1,5 @@
 import {
+  AgentTeam,
   ApprovedArchitectureComposition,
   ApprovedSolution,
   DeliveryTargetKind,
@@ -18,6 +19,8 @@ import {
   IntentAnalyzer,
   RequirementsIntelligence,
   SolutionPlanner,
+  TeamComposer,
+  TeamValidator,
   TechnologySelector,
   TopologyResolver,
 } from './services';
@@ -36,6 +39,7 @@ export interface GenerationResult {
   selection: StackSelectionProposal;
   approvedSolution: ApprovedSolution;
   architectureComposition: ApprovedArchitectureComposition;
+  agentTeam: AgentTeam;
 }
 
 export class Generator {
@@ -47,6 +51,8 @@ export class Generator {
   private approvedSolutionValidator = new ApprovedSolutionValidator();
   private architectureComposer = new ArchitectureComposer();
   private architectureValidator = new ArchitectureValidator();
+  private teamComposer = new TeamComposer();
+  private teamValidator = new TeamValidator();
   private registry = new StackRegistry();
 
   constructor(private config: GeneratorConfig = {}) {}
@@ -114,6 +120,23 @@ export class Generator {
       conflicts: compositionProposal.conflicts,
     });
 
+    const teamDraft = this.teamComposer.compose({
+      approvedSolution,
+      architectureComposition,
+      contract,
+      registry: this.registry,
+    });
+
+    const agentTeam = this.teamValidator.validateAndApprove({
+      missionId: input.missionId,
+      approvedSolutionId: approvedSolution.id,
+      architectureCompositionId: architectureComposition.id,
+      complexityProfile: approvedSolution.complexityProfile,
+      riskProfile: approvedSolution.riskProfile,
+      instances: teamDraft.instances,
+      decisions: teamDraft.decisions,
+    });
+
     return {
       intent,
       contract,
@@ -122,6 +145,7 @@ export class Generator {
       selection,
       approvedSolution,
       architectureComposition,
+      agentTeam,
     };
   }
 }

@@ -8,3 +8,5 @@ export * from './stack-architect';
 export * from './architecture-composer';
 export * from './architecture-conflict-detector';
 export * from './architecture-validator';
+export * from './team-composer';
+export * from './team-validator';

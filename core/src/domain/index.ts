@@ -8,3 +8,4 @@ export * from './approved-solution';
 export * from './architecture-decision';
 export * from './stack-architecture-proposal';
 export * from './approved-architecture-composition';
+export * from './agent-team';
