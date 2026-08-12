@@ -31,6 +31,17 @@ O Gerador Inteligente responde a uma ideia do usuário e a transforma em uma sol
 ```text
 ldcn-final/
 ├── README.md                              ← este arquivo
+├── core/                                  ← implementação do core de decisão
+│   ├── src/
+│   │   ├── domain/                        ← entidades e contratos
+│   │   ├── services/                      ← serviços de cada camada
+│   │   ├── policies/                      ← políticas de escopo e aprovação
+│   │   ├── registry/                      ← catálogo de stacks
+│   │   ├── __tests__/                     ← testes unitários
+│   │   └── generator.ts                   ← orquestração do fluxo principal
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── jest.config.js
 └── LDCN_Gerador_Inteligente_Obsidian/     ← vault do Obsidian
     ├── 00 - Gerador Inteligente - Mapa Raiz.md
     ├── 01 - Constituição e Visão Geral.md
@@ -83,6 +94,36 @@ ldcn-final/
 - Comece por [`LDCN_Gerador_Inteligente_Obsidian/00 - Gerador Inteligente - Mapa Raiz.md`](./LDCN_Gerador_Inteligente_Obsidian/00%20-%20Gerador%20Inteligente%20-%20Mapa%20Raiz.md).
 - Leia [`01 - Constituição e Visão Geral.md`](./LDCN_Gerador_Inteligente_Obsidian/01%20-%20Constituição%20e%20Visão%20Geral.md) para entender as regras fundamentais.
 - Consulte [`28 - Decisão Final de Arquitetura.md`](./LDCN_Gerador_Inteligente_Obsidian/28%20-%20Decisão%20Final%20de%20Arquitetura.md) para o resumo da divisão de autoridade.
+
+### Rodando o core de decisão
+
+O diretório [`core/`](./core) contém a primeira implementação executável do fluxo principal:
+
+```text
+IDEIA → ProjectIntent → RequirementsContract → SolutionTopology
+→ SolutionProposal → StackSelectionProposal → ApprovedSolution
+```
+
+```bash
+cd core
+npm install
+npm test       # executa os testes unitários
+npm run build  # compila TypeScript
+```
+
+Exemplo de uso:
+
+```ts
+import { Generator } from './src/generator';
+
+const generator = new Generator({ mode: 'AUTO' });
+const result = generator.generate({
+  missionId: 'mission-001',
+  rawUserIdea: 'Quero uma plataforma para gerenciar tarefas com login e dashboard.',
+});
+
+console.log(result.approvedSolution.selectedStacks);
+```
 
 ---
 
@@ -183,4 +224,5 @@ A empresa completa existe no catálogo. A `ApprovedSolution` define quais depart
 
 ## 🛠️ Status
 
-Documentação canônica em evolução. As notas estão ligadas por wikilinks e mantêm `status: canonico` no frontmatter.
+- Documentação canônica em evolução no Obsidian vault.
+- **Core de decisão implementado em `core/`** cobrindo Intent → ApprovedSolution com testes passando.

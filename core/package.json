@@ -1,0 +1,27 @@
+{
+  "name": "ldcn-core",
+  "version": "0.1.0",
+  "description": "Core de decisão do LDCN Gerador Inteligente",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": [
+    "ldcn",
+    "agent",
+    "decision-system"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.2.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
+    "typescript": "^5.7.3"
+  }
+}
