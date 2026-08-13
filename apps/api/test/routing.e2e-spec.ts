@@ -36,7 +36,7 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     await request(server)
       .post(`/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero uma landing page' })
-      .expect(201);
+      .expect(202);
 
     const classify = await request(server)
       .post(`/missions/${missionId}/tasks/task-1/intelligent-routing/classify`)

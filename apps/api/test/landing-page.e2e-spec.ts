@@ -11,7 +11,8 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
  * Full-stack regression for the doc 34 scenario (see core/src/__tests__/end-to-end-scenarios.test.ts,
  * "landing page is a constitutional executable mission"), replayed over real HTTP against real
  * Postgres: POST start -> GET overview must never come back READY_FOR_EXECUTION with zero
- * stacks/team/pipeline.
+ * stacks/team/pipeline. Also covers the doc 42 §3 Operation pattern (202 + operationId +
+ * GET /operations/:id) and the composed MissionOverview read model (doc 36 §70).
  */
 (RUN_DB_TESTS ? describe : describe.skip)('Generator API — landing page (e2e)', () => {
   let app: INestApplication;
@@ -29,6 +30,7 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     await prisma.decisionEvent.deleteMany({ where: { missionId } });
     await prisma.generationResult.deleteMany({ where: { missionId } });
     await prisma.generatorMissionState.deleteMany({ where: { missionId } });
+    await prisma.operation.deleteMany({ where: { missionId } });
     await app.close();
   });
 
@@ -38,23 +40,36 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     const start = await request(app.getHttpServer())
       .post(`/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero uma landing page' })
-      .expect(201);
+      .expect(202);
+    expect(start.body).toMatchObject({ missionId, status: 'SUCCEEDED' });
+    expect(typeof start.body.operationId).toBe('string');
 
-    expect(start.body.approvedSolution.deliveryTargets.some((t: { kind: string }) => t.kind === 'FRONTEND')).toBe(true);
-    expect(start.body.approvedSolution.selectedStacks.length).toBeGreaterThan(0);
-    expect(start.body.agentTeam.instances.length).toBeGreaterThan(0);
-    expect(start.body.pipeline.nodes.length).toBeGreaterThan(0);
-    expect(start.body.governance.allowed).toBe(true);
+    const operation = await request(app.getHttpServer()).get(`/operations/${start.body.operationId}`).expect(200);
+    expect(operation.body.status).toBe('SUCCEEDED');
+    const result = operation.body.resultJson;
+    expect(result.approvedSolution.deliveryTargets.some((t: { kind: string }) => t.kind === 'FRONTEND')).toBe(true);
+    expect(result.approvedSolution.selectedStacks.length).toBeGreaterThan(0);
+    expect(result.agentTeam.instances.length).toBeGreaterThan(0);
+    expect(result.pipeline.nodes.length).toBeGreaterThan(0);
+    expect(result.governance.allowed).toBe(true);
 
     const overview = await request(app.getHttpServer()).get(`/missions/${missionId}/intelligent-generator`).expect(200);
     expect(overview.body.status).toBe('READY_FOR_EXECUTION');
     expect(overview.body.approvedStackCount).toBeGreaterThan(0);
     expect(overview.body.pipelineNodeCount).toBeGreaterThan(0);
 
+    const missionOverview = await request(app.getHttpServer()).get(`/missions/${missionId}/overview`).expect(200);
+    expect(missionOverview.body.solutionSummary.selectedStackCount).toBeGreaterThan(0);
+    expect(missionOverview.body.teamSummary.instanceCount).toBeGreaterThan(0);
+    expect(missionOverview.body.pipelineSummary.nodeCount).toBeGreaterThan(0);
+    expect(missionOverview.body.nextAction).toBe('START_EXECUTION');
+    expect(missionOverview.body.blockers).toEqual([]);
+    expect(missionOverview.body.currentOperation.id).toBe(start.body.operationId);
+
     await request(app.getHttpServer())
       .post(`/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero uma landing page' })
-      .expect(201);
+      .expect(202);
 
     await request(app.getHttpServer())
       .post(`/missions/${missionId}/intelligent-generator/start`)

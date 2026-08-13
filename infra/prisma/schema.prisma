@@ -155,3 +155,21 @@ model GenerationResult {
   resultJson  Json
   updatedAt   DateTime @updatedAt
 }
+
+/// Envelope assíncrono do comando POST .../start (doc 36 §11, simplificado: sem
+/// workspaceId/tenantId, que ainda não existem no sistema). type é sempre
+/// "GENERATE_MISSION" por enquanto (único comando assíncrono implementado).
+model Operation {
+  id            String    @id
+  missionId     String
+  type          String
+  status        String
+  correlationId String
+  resultJson    Json?
+  errorCode     String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([missionId, createdAt])
+}

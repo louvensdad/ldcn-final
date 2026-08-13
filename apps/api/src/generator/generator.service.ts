@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DeliveryTargetKind, GeneratorDecisionEventType, IntelligentGeneratorQueryService } from 'ldcn-core';
 import { MissionPersistenceService } from '../persistence/mission-persistence.service';
+import { OperationPersistenceService } from '../operations/operation-persistence.service';
+import { EventBusService } from '../events/event-bus.service';
 
 export interface StartMissionInput {
   rawUserIdea: string;
@@ -9,17 +12,57 @@ export interface StartMissionInput {
   constraints?: string[];
 }
 
+export interface StartMissionAccepted {
+  operationId: string;
+  missionId: string;
+  status: 'SUCCEEDED' | 'FAILED';
+}
+
 @Injectable()
 export class GeneratorService {
-  constructor(private readonly missionPersistence: MissionPersistenceService) {}
+  constructor(
+    private readonly missionPersistence: MissionPersistenceService,
+    private readonly operations: OperationPersistenceService,
+    private readonly eventBus: EventBusService
+  ) {}
 
-  async start(missionId: string, input: StartMissionInput) {
+  /**
+   * doc 42 §3 (Operation pattern): the caller gets an operationId back and follows up via
+   * GET /operations/:id or the SSE stream, instead of the full GenerationResult inline.
+   *
+   * Today generate() has no LLM/execution I/O, so it's still fast enough to run inside this
+   * same request — there's no real latency to hide yet. What matters now is establishing the
+   * *contract* (operationId, Operation record, operation.* events) so nothing has to change on
+   * the client when a genuinely slow, detached execution path lands in a later slice. Errors
+   * (including GENERATOR_COMMAND_CONFLICT) still surface as an immediate 4xx via
+   * DomainErrorFilter, not as a silently-failed Operation the caller has to poll for.
+   */
+  async start(missionId: string, input: StartMissionInput): Promise<StartMissionAccepted> {
     if (!missionId?.trim()) throw new Error('MISSION_ID_REQUIRED');
     if (!input || typeof input.rawUserIdea !== 'string' || !input.rawUserIdea.trim()) throw new Error('INVALID_INTENT_INPUT');
-    const session = await this.missionPersistence.hydrate(missionId);
-    const result = session.commands.generate({ missionId, ...input });
-    await this.missionPersistence.flush(missionId, session);
-    return result;
+
+    const correlationId = randomUUID();
+    const operation = await this.operations.create(missionId, 'GENERATE_MISSION', correlationId);
+    this.eventBus.emit('operation.started', { type: 'GENERATE_MISSION' }, { missionId, operationId: operation.id });
+
+    try {
+      const session = await this.missionPersistence.hydrate(missionId);
+      const result = session.commands.generate({ missionId, ...input });
+      await this.missionPersistence.flush(missionId, session);
+      await this.operations.succeed(operation.id, result);
+
+      this.eventBus.emit('operation.completed', { approvedSolutionId: result.approvedSolution.id }, { missionId, operationId: operation.id });
+      this.eventBus.emit('mission.state.changed', { allowed: result.governance.allowed }, { missionId, operationId: operation.id });
+      this.eventBus.emit('team.composed', { teamId: result.agentTeam.id, instanceCount: result.agentTeam.instances.length }, { missionId, operationId: operation.id });
+      this.eventBus.emit('pipeline.updated', { pipelineId: result.pipeline.id, nodeCount: result.pipeline.nodes.length }, { missionId, operationId: operation.id });
+
+      return { operationId: operation.id, missionId, status: 'SUCCEEDED' };
+    } catch (error) {
+      const errorCode = error instanceof Error ? error.message : 'INTERNAL_ERROR';
+      await this.operations.fail(operation.id, errorCode);
+      this.eventBus.emit('operation.failed', { errorCode }, { missionId, operationId: operation.id });
+      throw error;
+    }
   }
 
   async getEvents(missionId: string) {

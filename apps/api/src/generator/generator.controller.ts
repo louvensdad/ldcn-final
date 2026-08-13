@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { GeneratorService, StartMissionInput } from './generator.service';
 
 @Controller('missions/:missionId/intelligent-generator')
@@ -6,6 +6,7 @@ export class GeneratorController {
   constructor(private readonly generator: GeneratorService) {}
 
   @Post('start')
+  @HttpCode(202)
   start(@Param('missionId') missionId: string, @Body() body: StartMissionInput) {
     return this.generator.start(missionId, body);
   }
