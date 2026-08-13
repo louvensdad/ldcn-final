@@ -18,6 +18,7 @@ export interface ApprovedSolution extends VersionedEntity {
   riskProfile: string;
   approvedAt: Date;
   status: 'ACTIVE' | 'SUPERSEDED';
+  contextHash: string;
 }
 
 export interface ApprovedSolutionInput {

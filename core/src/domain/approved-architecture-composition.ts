@@ -14,6 +14,7 @@ export interface ApprovedArchitectureComposition extends VersionedEntity {
   approvedSolutionId: string;
   proposals: StackArchitectureProposal[];
   conflicts: ArchitectureConflict[];
+  contextHash: string;
   status: 'APPROVED' | 'BLOCKED_BY_CONFLICT';
   approvedAt?: Date;
 }

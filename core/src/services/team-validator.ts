@@ -1,4 +1,5 @@
 import { generateId } from '../utils/id';
+import { createHash } from 'crypto';
 import { AgentTeam, AgentTeamCompositionInput } from '../domain/agent-team';
 
 /**
@@ -17,6 +18,7 @@ export class TeamValidator {
     this.assertReviewerIsNeverExecutor(input);
 
     const existing = this.teams.get(input.missionId);
+    if (existing && existing.status === 'APPROVED' && existing.approvedSolutionId === input.approvedSolutionId && existing.architectureCompositionId === input.architectureCompositionId && JSON.stringify(existing.instances.map((i) => [i.agentKey, i.role, i.stackKey])) === JSON.stringify(input.instances.map((i) => [i.agentKey, i.role, i.stackKey]))) return existing;
     if (existing) {
       this.teams.set(input.missionId, { ...existing, status: 'PROPOSED' });
     }
@@ -31,6 +33,7 @@ export class TeamValidator {
       riskProfile: input.riskProfile,
       instances: input.instances,
       decisions: input.decisions,
+      contextHash: createHash('sha256').update(JSON.stringify({ approvedSolutionId: input.approvedSolutionId, architectureCompositionId: input.architectureCompositionId, instances: input.instances.map((instance) => [instance.agentKey, instance.role, instance.stackKey]) })).digest('hex'),
       status: 'APPROVED',
     };
 

@@ -6,6 +6,7 @@ import {
 } from '../domain/approved-solution';
 import { ApprovalPolicy } from '../policies/approval-policy';
 import { SelectionMode } from '../domain/stack-selection';
+import { createHash } from 'crypto';
 
 export class ApprovedSolutionValidator {
   private approvedSolutions: Map<string, ApprovedSolution> = new Map();
@@ -55,6 +56,9 @@ export class ApprovedSolutionValidator {
     }
 
     const existing = this.approvedSolutions.get(input.missionId);
+    if (existing && existing.status === 'ACTIVE' && existing.requirementsContractId === input.requirementsContractId && existing.selectionMode === input.selectionProposal.mode && JSON.stringify(existing.selectedStacks) === JSON.stringify(input.selectionProposal.selections) && existing.topology.contextHash === topology.contextHash) {
+      return existing;
+    }
     if (existing) {
       this.approvedSolutions.set(input.missionId, { ...existing, status: 'SUPERSEDED' });
     }
@@ -71,6 +75,7 @@ export class ApprovedSolutionValidator {
       complexityProfile: this.inferComplexity(approvedTargets),
       riskProfile: this.inferRisk(approvedTargets, input.selectionProposal.mode),
       approvedAt: new Date(),
+      contextHash: createHash('sha256').update(JSON.stringify({ topologyId: topology.id, requirementsContractId: input.requirementsContractId, selections: input.selectionProposal.selections.map((selection) => [selection.deliveryTargetKind, selection.stackKey]) })).digest('hex'),
       status: 'ACTIVE',
     };
 

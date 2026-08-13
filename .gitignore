@@ -13,6 +13,9 @@ npm-debug.log*
 .env
 .env.local
 
+# Local JSON-file persistence (dev runtime state, not source)
+core/data/
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -47,6 +47,7 @@ export interface AgentTeam extends VersionedEntity {
   riskProfile: string;
   instances: AgentInstance[];
   decisions: TeamCompositionDecision[];
+  contextHash: string;
   status: 'PROPOSED' | 'APPROVED';
 }
 

@@ -21,6 +21,8 @@ export interface DeliveryTarget {
 }
 
 export interface SolutionTopology extends VersionedEntity {
+  requirementsContractId: string;
   deliveryTargets: DeliveryTarget[];
   status: 'PROPOSED' | 'APPROVED';
+  contextHash: string;
 }

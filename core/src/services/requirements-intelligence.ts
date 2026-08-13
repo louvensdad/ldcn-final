@@ -6,6 +6,7 @@ import {
   RequirementsContract,
 } from '../domain/requirements-contract';
 import { ClassifiedItem, ProjectIntent } from '../domain/project-intent';
+import { createHash } from 'crypto';
 
 export class RequirementsIntelligence {
   buildContract(intent: ProjectIntent): RequirementsContract {
@@ -57,6 +58,7 @@ export class RequirementsIntelligence {
     });
 
     add('functional', intent.problemStatement, 'INFERRED', 'must', 'HIGH');
+    add('functional', intent.rawUserIdea, 'USER_EXPLICIT', 'must', 'HIGH');
 
     if (intent.technologyPreferences.length > 0) {
       add(
@@ -68,14 +70,16 @@ export class RequirementsIntelligence {
       );
     }
 
-    return {
+    const contract: RequirementsContract = {
       id: generateId(),
       missionId: intent.missionId,
       version: 1,
       intentId: intent.id,
       items,
       status: 'DRAFT',
+      contextHash: createHash('sha256').update(JSON.stringify({ intentId: intent.id, items: items.map((item) => [item.category, item.description, item.priority]) })).digest('hex'),
     };
+    return contract;
   }
 
   approve(contract: RequirementsContract): RequirementsContract {

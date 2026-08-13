@@ -39,4 +39,5 @@ export interface RequirementsContract extends VersionedEntity {
   intentId: string;
   items: RequirementItem[];
   status: 'DRAFT' | 'APPROVED';
+  contextHash: string;
 }

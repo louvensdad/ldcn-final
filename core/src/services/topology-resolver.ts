@@ -8,6 +8,7 @@ import {
   TargetStatus,
 } from '../domain/solution-topology';
 import { ScopePolicy } from '../policies/scope-policy';
+import { createHash } from 'crypto';
 
 export interface TopologyResolverInput {
   contract: RequirementsContract;
@@ -44,19 +45,23 @@ export class TopologyResolver {
     return {
       id: generateId(),
       missionId: input.contract.missionId,
+      requirementsContractId: input.contract.id,
       version: 1,
       deliveryTargets,
+      contextHash: createHash('sha256').update(JSON.stringify({ contractId: input.contract.id, deliveryTargets: deliveryTargets.map((target) => [target.kind, target.required, target.status]) })).digest('hex'),
       status: 'PROPOSED',
     };
   }
 
   approve(topology: SolutionTopology): SolutionTopology {
+    const deliveryTargets = topology.deliveryTargets.map((t) =>
+      t.status === 'PROPOSED' && t.required ? { ...t, status: 'APPROVED' as TargetStatus } : t
+    );
     return {
       ...topology,
       status: 'APPROVED',
-      deliveryTargets: topology.deliveryTargets.map((t) =>
-        t.status === 'PROPOSED' && t.required ? { ...t, status: 'APPROVED' as TargetStatus } : t
-      ),
+      deliveryTargets,
+      contextHash: createHash('sha256').update(JSON.stringify({ contractId: topology.requirementsContractId, deliveryTargets: deliveryTargets.map((target) => [target.kind, target.required, target.status]) })).digest('hex'),
     };
   }
 
@@ -109,22 +114,42 @@ export class TopologyResolver {
 
   private inferRequired(kind: DeliveryTargetKind, contract: RequirementsContract): boolean {
     const text = contract.items.map((i) => i.description.toLowerCase()).join(' ');
+    const has = (...terms: string[]) => terms.some((term) => this.matchesTerm(text, term));
 
     switch (kind) {
       case 'BACKEND':
-        return text.includes('api') || text.includes('backend') || text.includes('servidor');
+        return has('api', 'backend', 'servidor');
       case 'FRONTEND':
-        return text.includes('dashboard') || text.includes('tela') || text.includes('interface');
+        return has(
+          'dashboard',
+          'tela',
+          'interface',
+          'landing page',
+          'site institucional',
+          'página institucional',
+          'pagina institucional',
+          'blog',
+          'portfólio',
+          'portfolio'
+        );
       case 'MOBILE':
-        return text.includes('mobile') || text.includes('app') || text.includes('celular');
+        return has('mobile', 'app', 'celular');
       case 'AI':
-        return text.includes('ia') || text.includes('modelo') || text.includes('prever');
+        return has('ia', 'modelo', 'prever');
       case 'DATA':
-        return text.includes('dados') || text.includes('etl') || text.includes('lake');
+        return has('dados', 'etl', 'lake');
       case 'EXTERNAL_INTEGRATION':
-        return text.includes('integração') || text.includes('webhook') || text.includes('externo');
+        return has('integração', 'webhook', 'externo');
       default:
         return false;
     }
+  }
+
+  /** Palavras curtas/ambíguas usam limite de palavra (\b) para evitar falso positivo
+   * como "ia" dentro de "gerenciar" ou "api" dentro de "terapia". Frases com espaço
+   * já são específicas o suficiente para usar substring simples. */
+  private matchesTerm(text: string, term: string): boolean {
+    if (term.includes(' ')) return text.includes(term);
+    return new RegExp(`\\b${term}\\b`, 'iu').test(text);
   }
 }

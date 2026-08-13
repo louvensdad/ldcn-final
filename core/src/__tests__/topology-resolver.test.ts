@@ -40,6 +40,21 @@ describe('TopologyResolver', () => {
     }
   });
 
+  it('should infer frontend from a landing page idea (doc 34 regression)', () => {
+    const topology = approveAndResolve('quero uma landing page');
+
+    const frontend = topology.deliveryTargets.find((t) => t.kind === 'FRONTEND');
+    expect(frontend?.required).toBe(true);
+    expect(frontend?.source).toBe('REQUIREMENTS_INFERRED');
+  });
+
+  it('should not infer AI from unrelated words that merely contain "ia" as a substring', () => {
+    const topology = approveAndResolve('Quero um app para gerenciar tarefas.', ['MOBILE']);
+
+    const ai = topology.deliveryTargets.find((t) => t.kind === 'AI');
+    expect(ai?.required).toBe(false);
+  });
+
   it('should reject resolution with unapproved contract', () => {
     const intent = analyzer.analyze({ missionId: 'mission-2', rawUserIdea: 'Sistema.' });
     const draft = requirements.buildContract(intent);

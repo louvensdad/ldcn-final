@@ -1,0 +1,12 @@
+{
+  "name": "ldcn-final",
+  "private": true,
+  "workspaces": [
+    "core",
+    "apps/api"
+  ],
+  "scripts": {
+    "test": "npm test -w core && npm test -w apps/api",
+    "build": "npm run build -w core && npm run build -w apps/api"
+  }
+}

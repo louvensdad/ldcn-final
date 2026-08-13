@@ -1,5 +1,7 @@
 import {
   AgentTeam,
+  MissionPipelinePlan,
+  GovernanceCheck,
   ApprovedArchitectureComposition,
   ApprovedSolution,
   DeliveryTargetKind,
@@ -21,6 +23,8 @@ import {
   SolutionPlanner,
   TeamComposer,
   TeamValidator,
+  PipelineComposer,
+  GovernanceGuard,
   TechnologySelector,
   TopologyResolver,
 } from './services';
@@ -40,6 +44,8 @@ export interface GenerationResult {
   approvedSolution: ApprovedSolution;
   architectureComposition: ApprovedArchitectureComposition;
   agentTeam: AgentTeam;
+  pipeline: MissionPipelinePlan;
+  governance: GovernanceCheck;
 }
 
 export class Generator {
@@ -53,6 +59,8 @@ export class Generator {
   private architectureValidator = new ArchitectureValidator();
   private teamComposer = new TeamComposer();
   private teamValidator = new TeamValidator();
+  private pipelineComposer = new PipelineComposer();
+  private governanceGuard = new GovernanceGuard();
   private registry = new StackRegistry();
 
   constructor(private config: GeneratorConfig = {}) {}
@@ -137,6 +145,24 @@ export class Generator {
       decisions: teamDraft.decisions,
     });
 
+    const pipeline = this.pipelineComposer.compose({
+      approvedSolution,
+      architectureComposition,
+      agentTeam,
+      contract,
+      registry: this.registry,
+    });
+
+    const governance = this.governanceGuard.check({
+      intent,
+      contract,
+      topology,
+      solution: approvedSolution,
+      architecture: architectureComposition,
+      team: agentTeam,
+      pipeline,
+    });
+
     return {
       intent,
       contract,
@@ -146,6 +172,8 @@ export class Generator {
       approvedSolution,
       architectureComposition,
       agentTeam,
+      pipeline,
+      governance,
     };
   }
 }

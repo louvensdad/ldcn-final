@@ -172,6 +172,27 @@ export class StackRegistry {
         performanceSpecialistAgentKey: 'backend.java.performance-specialist',
       },
     });
+
+    this.register({
+      key: 'stack.dart.flutter',
+      name: 'Flutter',
+      language: 'Dart',
+      deliveryTargetKinds: ['MOBILE'],
+      strengths: ['cross-platform', 'native performance', 'single codebase'],
+      tradeoffs: ['Dart ecosystem', 'platform-specific edge cases'],
+      runtimeSupport: true,
+      architectureAgentKey: 'architecture.flutter.architect',
+      agentCatalog: {
+        leadAgentKey: 'mobile.flutter.lead',
+        seniorDeveloperAgentKey: 'mobile.flutter.senior-developer',
+        developerAgentKey: 'mobile.flutter.developer',
+        reviewerAgentKey: 'mobile.flutter.reviewer',
+        testEngineerAgentKey: 'mobile.flutter.test-engineer',
+        frameworkSpecialistAgentKey: 'mobile.flutter.specialist',
+        securitySpecialistAgentKey: 'mobile.flutter.security-specialist',
+        runtimeSpecialistAgentKey: 'mobile.flutter.runtime-specialist',
+      },
+    });
   }
 
   register(stack: StackDefinition): void {

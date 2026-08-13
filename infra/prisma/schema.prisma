@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model DecisionEvent {
+  id             String   @id
+  missionId      String
+  version        Int
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  idempotencyKey String   @unique
+  payload        Json
+  createdAt      DateTime @default(now())
+
+  @@unique([missionId, version])
+  @@index([missionId, createdAt])
+  @@index([missionId, eventType])
+  @@index([missionId, aggregateType, aggregateId])
+}
+
+/// Envelope-style: colunas indexáveis para lookup/list + detailJson com o
+/// LearningOutcome completo (core/src/domain/learning.ts), para não haver
+/// deriva entre schema e o shape real produzido pelos serviços do core.
+model LearningOutcome {
+  id          String   @id
+  missionId   String
+  version     Int
+  outcomeKey  String   @unique
+  taskId      String?
+  outcomeType String
+  success     Boolean
+  detailJson  Json
+  createdAt   DateTime @default(now())
+
+  @@unique([missionId, version])
+  @@index([missionId, createdAt])
+  @@index([missionId, outcomeType])
+}
+
+model ExecutionDispatch {
+  id                String   @id
+  missionId         String
+  version           Int
+  taskId            String
+  routingDecisionId String
+  executionId       String
+  status            String
+  contextHash       String
+  idempotencyKey    String   @unique
+  createdAt         DateTime @default(now())
+
+  @@unique([missionId, taskId, contextHash])
+  @@index([missionId, taskId])
+  @@index([executionId])
+}
+
+/// contextHash é a chave de idempotência do FailureClassifier (core/src/services/failure-classifier.ts).
+model FailureSnapshot {
+  id          String   @id
+  missionId   String
+  version     Int
+  taskId      String
+  contextHash String   @unique
+  detailJson  Json
+  createdAt   DateTime @default(now())
+
+  @@index([missionId, taskId, createdAt])
+}
+
+/// contextHash é a chave de idempotência do RepairAdvisor (core/src/services/repair-advisor.ts).
+model RepairAdvisory {
+  id          String   @id
+  missionId   String
+  version     Int
+  taskId      String
+  contextHash String   @unique
+  detailJson  Json
+  createdAt   DateTime @default(now())
+
+  @@index([missionId, taskId, createdAt])
+}
+
+/// idempotencyKey = `${missionId}:${routingDecisionId}:${evidenceHash}`, calculada pelo
+/// ReviewGateEvaluator (core/src/services/review-gate-evaluator.ts).
+model ReviewGateEvaluation {
+  id             String   @id
+  missionId      String
+  taskId         String
+  idempotencyKey String   @unique
+  detailJson     Json
+  createdAt      DateTime @default(now())
+
+  @@index([missionId, taskId, createdAt])
+}
+
+/// core/src/services/job-classifier.ts memoiza por `${missionId}:${taskId}:${solutionId}:${description}`
+/// (múltiplas classificações por task ao longo do tempo são válidas — não é um conflito).
+model JobClassificationRecord {
+  id         String   @id
+  missionId  String
+  taskId     String
+  contextKey String   @unique
+  detailJson Json
+  createdAt  DateTime @default(now())
+
+  @@index([missionId, taskId, createdAt])
+}
+
+/// core/src/services/intelligent-work-router.ts: uma rota por `${missionId}:${taskId}`; um
+/// contextHash divergente é ROUTING_DECISION_STALE, não uma nova versão silenciosa.
+model WorkRoutingDecisionRecord {
+  id         String   @id
+  missionId  String
+  taskId     String
+  routingKey String   @unique
+  detailJson Json
+  createdAt  DateTime @default(now())
+
+  @@index([missionId, taskId])
+}
+
+/// core/src/services/team-switch-resolver.ts: uma decisão por `${missionId}:${taskId}:${sourceTeamKey}:${targetTeamKey}`;
+/// contextHash divergente é TEAM_SWITCH_CONTEXT_STALE. O HandoffPackage vem embutido em detailJson.
+model TeamSwitchDecisionRecord {
+  id         String   @id
+  missionId  String
+  taskId     String
+  switchKey  String   @unique
+  detailJson Json
+  createdAt  DateTime @default(now())
+
+  @@index([missionId, taskId, createdAt])
+}
+
+/// Espelha core/src/domain/generator-state.ts (GeneratorMissionState).
+model GeneratorMissionState {
+  missionId  String   @id
+  state      String
+  version    Int
+  lastReason String?
+  updatedAt  DateTime @updatedAt
+}
+
+/// Espelha StoredGenerationResult (core/src/services/generation-result-store.ts):
+/// snapshot completo do GenerationResult de uma Mission, usado para retry-safe idempotency.
+model GenerationResult {
+  missionId   String   @id
+  fingerprint String
+  resultJson  Json
+  updatedAt   DateTime @updatedAt
+}

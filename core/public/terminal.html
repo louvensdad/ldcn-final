@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LDCN // Console de Missão</title>
+  <link rel="stylesheet" href="/terminal.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="pulse"></span><div><strong>LDCN</strong><small>GERADOR INTELIGENTE</small></div></div>
+      <div class="status"><span id="healthDot" class="dot"></span><span id="healthText">verificando runtime</span><button id="clearBtn" class="quiet">limpar sessão</button></div>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">console local / ambiente de prova</p>
+      <h1>Converse com o<br><em>gerador.</em></h1>
+      <p class="lede">Crie uma missão, acompanhe as decisões e inspecione cada evidência — sem sair do terminal.</p>
+    </section>
+
+    <section class="workspace">
+      <aside class="rail">
+        <div class="rail-label">MISSÃO ATIVA</div>
+        <label for="missionId">identificador</label>
+        <input id="missionId" value="mission-local-01" spellcheck="false">
+        <div class="quick-actions">
+          <button data-command="health">health check <kbd>H</kbd></button>
+          <button data-command="overview">ver overview <kbd>O</kbd></button>
+          <button data-command="events">ver eventos <kbd>E</kbd></button>
+        </div>
+        <div class="rail-note"><span>▰</span> dados locais<br><small>persistência JSON ativa</small></div>
+      </aside>
+
+      <section class="console">
+        <div class="console-head"><span>SESSÃO / <b id="sessionId">não iniciada</b></span><span id="lineCount">0 linhas</span></div>
+        <div id="output" class="output" aria-live="polite">
+          <div class="welcome"><span class="prompt">λ</span><div><strong>Console pronto.</strong><br><span>Descreva o produto no campo abaixo para iniciar uma missão.</span><br><span class="muted">Atalhos: H health · O overview · E eventos · Ctrl+Enter executar</span></div></div>
+        </div>
+        <form id="commandForm" class="composer">
+          <span class="prompt">λ</span><textarea id="idea" rows="2" placeholder="Quero uma plataforma para..." required></textarea><button type="submit" class="run">executar <span>↵</span></button>
+        </form>
+      </section>
+    </section>
+    <footer><span>CORE ONLINE</span><span>porta 3000</span><span>v0.1 local</span></footer>
+  </main>
+  <script src="/terminal.js"></script>
+</body>
+</html>

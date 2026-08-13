@@ -15,6 +15,7 @@ describe('Generator', () => {
     expect(result.proposal.recommendedSolution).toBeTruthy();
     expect(result.selection.selections.length).toBeGreaterThan(0);
     expect(result.approvedSolution.status).toBe('ACTIVE');
+    expect(result.approvedSolution.contextHash).toHaveLength(64);
     expect(result.approvedSolution.selectedStacks.length).toBeGreaterThan(0);
     expect(result.architectureComposition.status).toBe('APPROVED');
     expect(result.architectureComposition.proposals.length).toBe(

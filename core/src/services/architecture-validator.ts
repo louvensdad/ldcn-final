@@ -1,4 +1,5 @@
 import { generateId } from '../utils/id';
+import { createHash } from 'crypto';
 import {
   ApprovedArchitectureComposition,
   ArchitectureCompositionInput,
@@ -16,6 +17,7 @@ export class ArchitectureValidator {
     }
 
     const existing = this.compositions.get(input.missionId);
+    if (existing && existing.status === 'APPROVED' && existing.approvedSolutionId === input.approvedSolutionId && JSON.stringify(existing.proposals.map((p) => [p.stackKey, p.architectureStyle])) === JSON.stringify(input.proposals.map((p) => [p.stackKey, p.architectureStyle]))) return existing;
     if (existing) {
       this.compositions.set(input.missionId, { ...existing, status: 'BLOCKED_BY_CONFLICT' });
     }
@@ -27,6 +29,7 @@ export class ArchitectureValidator {
       approvedSolutionId: input.approvedSolutionId,
       proposals: input.proposals.map((p) => ({ ...p, status: 'APPROVED' as const })),
       conflicts: input.conflicts,
+      contextHash: createHash('sha256').update(JSON.stringify({ approvedSolutionId: input.approvedSolutionId, proposals: input.proposals.map((proposal) => proposal.id), conflicts: input.conflicts.map((conflict) => conflict.id) })).digest('hex'),
       status: 'APPROVED',
       approvedAt: new Date(),
     };

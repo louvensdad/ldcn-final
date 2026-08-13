@@ -7,6 +7,7 @@ import {
 } from '../domain/project-intent';
 import { DecisionConfidence } from '../domain/shared';
 import { DeliveryTargetKind } from '../domain/solution-topology';
+import { createHash } from 'crypto';
 
 export class IntentAnalyzer {
   analyze(input: IntentInput): ProjectIntent {
@@ -27,7 +28,7 @@ export class IntentAnalyzer {
       decisionImpact: this.maxImpact(unknowns),
     };
 
-    return {
+    const intent: ProjectIntent = {
       id: generateId(),
       missionId: input.missionId,
       version: 1,
@@ -43,7 +44,9 @@ export class IntentAnalyzer {
       forbiddenDeliveryTargets: input.forbiddenDeliveryTargets ?? [],
       confidence,
       status: confidence.decisionImpact === 'HIGH' ? 'DRAFT' : 'READY',
+      contextHash: createHash('sha256').update(JSON.stringify({ missionId: input.missionId, rawUserIdea: input.rawUserIdea, constraints: input.constraints ?? [], technologyPreferences: input.technologyPreferences ?? [], forbiddenDeliveryTargets: input.forbiddenDeliveryTargets ?? [] })).digest('hex'),
     };
+    return intent;
   }
 
   private extractProblemStatement(idea: string): string {

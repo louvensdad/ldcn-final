@@ -24,6 +24,7 @@ export interface ProjectIntent extends VersionedEntity {
   forbiddenDeliveryTargets: DeliveryTargetKind[];
   confidence: DecisionConfidence;
   status: 'DRAFT' | 'READY';
+  contextHash: string;
 }
 
 export interface IntentInput {

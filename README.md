@@ -31,48 +31,37 @@ O Gerador Inteligente responde a uma ideia do usuário e a transforma em uma sol
 ```text
 ldcn-final/
 ├── README.md                              ← este arquivo
-├── core/                                  ← implementação do core de decisão
+├── package.json                           ← npm workspaces (core, apps/api)
+├── core/                                  ← implementação do core de decisão (Gerador Inteligente)
 │   ├── src/
 │   │   ├── domain/                        ← entidades e contratos
 │   │   ├── services/                      ← serviços de cada camada
 │   │   ├── policies/                      ← políticas de escopo e aprovação
 │   │   ├── registry/                      ← catálogo de stacks
+│   │   ├── adapters/                      ← transporte HTTP framework-neutral
 │   │   ├── __tests__/                     ← testes unitários
 │   │   └── generator.ts                   ← orquestração do fluxo principal
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── jest.config.js
-└── LDCN_Gerador_Inteligente_Obsidian/     ← vault do Obsidian
-    ├── 00 - Gerador Inteligente - Mapa Raiz.md
+├── apps/
+│   └── api/                               ← Platform API (NestJS) — wrapper HTTP/Prisma sobre core/
+│       ├── src/
+│       │   ├── generator/                 ← controller + service do fluxo do Gerador
+│       │   ├── runtime/                   ← overview operacional (RuntimeApiController)
+│       │   ├── persistence/               ← adapters Prisma (hydrate → core síncrono → flush)
+│       │   └── security/                  ← API key guard + filtro de erro
+│       └── test/                          ← e2e (supertest) contra Postgres real
+├── infra/
+│   ├── docker-compose.yml                 ← Postgres local
+│   └── prisma/
+│       └── schema.prisma                  ← schema Platform (DecisionEvent, GenerationResult, ...)
+└── LDCN_OS_Gerador_Backend_Integrado_Obsidian/   ← vault do Obsidian (38 documentos, 00–37)
+    ├── 00 - LDCN OS - Gerador + Backend - Mapa Raiz.md
     ├── 01 - Constituição e Visão Geral.md
-    ├── 02 - Intent Understanding.md
-    ├── 03 - Requirements Intelligence.md
-    ├── 04 - Solution Topology.md
-    ├── 05 - Solution Planning.md
-    ├── 06 - Technology Selection.md
-    ├── 07 - Stack Registry e Team Catalog.md
-    ├── 08 - Architecture Composition.md
-    ├── 09 - Approved Solution.md
-    ├── 10 - TeamComposer V2.md
-    ├── 11 - Dynamic Pipeline Composer.md
-    ├── 12 - Job Classification.md
-    ├── 13 - Intelligent Work Router.md
-    ├── 14 - Team Switching e Handoffs.md
-    ├── 15 - Integration Unit.md
-    ├── 16 - Scope Expansion.md
-    ├── 17 - Execution Runtime.md
-    ├── 18 - Review Gates e Repair.md
-    ├── 19 - Learning Intelligence e ML.md
-    ├── 20 - Memory e Context Budgeting.md
-    ├── 21 - Governance Segurança e Replanning.md
-    ├── 22 - Observability Audit e Tracing.md
-    ├── 23 - Backend NestJS APIs e Persistência.md
-    ├── 24 - Exemplos End-to-End.md
-    ├── 25 - Prompts Mestres.md
-    ├── 26 - Critérios de Aceite e Testes.md
-    ├── 27 - Slices Prompts Codex e Roadmap.md
-    ├── 28 - Decisão Final de Arquitetura.md
-    ├── 29 - Empresa de Agentes - Times Stacks e Prompts.md
+    ├── ...
+    ├── 36 - Backend Completo - Platform Core + Brain Service.md
+    ├── 37 - Arquitetura Integrada - Gerador + Backend.md
     └── README.md
 ```
 
@@ -82,8 +71,8 @@ ldcn-final/
 
 ### No Obsidian
 
-1. Copie a pasta `LDCN_Gerador_Inteligente_Obsidian` para dentro do seu vault.
-2. Abra `00 - Gerador Inteligente - Mapa Raiz`.
+1. Copie a pasta `LDCN_OS_Gerador_Backend_Integrado_Obsidian` para dentro do seu vault.
+2. Abra `00 - LDCN OS - Gerador + Backend - Mapa Raiz`.
 3. Navegue pelos links `[[...]]`.
 4. Use o **Graph View** do Obsidian para visualizar as relações entre as camadas.
 
@@ -91,9 +80,10 @@ ldcn-final/
 
 ### No navegador de arquivos
 
-- Comece por [`LDCN_Gerador_Inteligente_Obsidian/00 - Gerador Inteligente - Mapa Raiz.md`](./LDCN_Gerador_Inteligente_Obsidian/00%20-%20Gerador%20Inteligente%20-%20Mapa%20Raiz.md).
-- Leia [`01 - Constituição e Visão Geral.md`](./LDCN_Gerador_Inteligente_Obsidian/01%20-%20Constituição%20e%20Visão%20Geral.md) para entender as regras fundamentais.
-- Consulte [`28 - Decisão Final de Arquitetura.md`](./LDCN_Gerador_Inteligente_Obsidian/28%20-%20Decisão%20Final%20de%20Arquitetura.md) para o resumo da divisão de autoridade.
+- Comece por [`LDCN_OS_Gerador_Backend_Integrado_Obsidian/00 - LDCN OS - Gerador + Backend - Mapa Raiz.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/00%20-%20LDCN%20OS%20-%20Gerador%20%2B%20Backend%20-%20Mapa%20Raiz.md).
+- Leia [`01 - Constituição e Visão Geral.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/01%20-%20Constituição%20e%20Visão%20Geral.md) para entender as regras fundamentais.
+- Consulte [`28 - Decisão Final de Arquitetura.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/28%20-%20Decisão%20Final%20de%20Arquitetura.md) para o resumo da divisão de autoridade.
+- Consulte [`37 - Arquitetura Integrada - Gerador + Backend.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/37%20-%20Arquitetura%20Integrada%20-%20Gerador%20%2B%20Backend.md) para a ponte entre o Gerador e o Backend Platform Core + Brain Service.
 
 ### Rodando o core de decisão
 
@@ -213,12 +203,15 @@ A empresa completa existe no catálogo. A `ApprovedSolution` define quais depart
 
 | Documento | Descrição |
 |-----------|-----------|
-| [`00 - Gerador Inteligente - Mapa Raiz.md`](./LDCN_Gerador_Inteligente_Obsidian/00%20-%20Gerador%20Inteligente%20-%20Mapa%20Raiz.md) | Ponto de entrada e índice canônico |
-| [`01 - Constituição e Visão Geral.md`](./LDCN_Gerador_Inteligente_Obsidian/01%20-%20Constituição%20e%20Visão%20Geral.md) | Regras fundamentais e fluxo completo |
-| [`07 - Stack Registry e Team Catalog.md`](./LDCN_Gerador_Inteligente_Obsidian/07%20-%20Stack%20Registry%20e%20Team%20Catalog.md) | Catálogo de stacks e times |
-| [`09 - Approved Solution.md`](./LDCN_Gerador_Inteligente_Obsidian/09%20-%20Approved%20Solution.md) | Fronteira oficial de escopo |
-| [`28 - Decisão Final de Arquitetura.md`](./LDCN_Gerador_Inteligente_Obsidian/28%20-%20Decisão%20Final%20de%20Arquitetura.md) | Resumo da divisão de autoridade |
-| [`29 - Empresa de Agentes - Times Stacks e Prompts.md`](./LDCN_Gerador_Inteligente_Obsidian/29%20-%20Empresa%20de%20Agentes%20-%20Times%20Stacks%20e%20Prompts.md) | Visão organizacional completa |
+| [`00 - LDCN OS - Gerador + Backend - Mapa Raiz.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/00%20-%20LDCN%20OS%20-%20Gerador%20%2B%20Backend%20-%20Mapa%20Raiz.md) | Ponto de entrada e índice canônico |
+| [`01 - Constituição e Visão Geral.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/01%20-%20Constituição%20e%20Visão%20Geral.md) | Regras fundamentais e fluxo completo |
+| [`07 - Stack Registry e Team Catalog.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/07%20-%20Stack%20Registry%20e%20Team%20Catalog.md) | Catálogo de stacks e times |
+| [`09 - Approved Solution.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/09%20-%20Approved%20Solution.md) | Fronteira oficial de escopo |
+| [`23 - Backend NestJS APIs e Persistência.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/23%20-%20Backend%20NestJS%20APIs%20e%20Persistência.md) | Application services e endpoints implementados em `apps/api` |
+| [`28 - Decisão Final de Arquitetura.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/28%20-%20Decisão%20Final%20de%20Arquitetura.md) | Resumo da divisão de autoridade |
+| [`29 - Empresa de Agentes - Times Stacks e Prompts.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/29%20-%20Empresa%20de%20Agentes%20-%20Times%20Stacks%20e%20Prompts.md) | Visão organizacional completa |
+| [`34 - Guardrails de Readiness e Correção da Implementação.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/34%20-%20Guardrails%20de%20Readiness%20e%20Correção%20da%20Implementação.md) | Bug da landing page vazia (corrigido) e invariantes obrigatórios |
+| [`36 - Backend Completo - Platform Core + Brain Service.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/36%20-%20Backend%20Completo%20-%20Platform%20Core%20%2B%20Brain%20Service.md) | Arquitetura completa do backend e roadmap de slices (B0–B10) |
 
 ---
 
@@ -229,5 +222,14 @@ A empresa completa existe no catálogo. A `ApprovedSolution` define quais depart
   - Intent Understanding → Requirements Intelligence → Solution Topology → Solution Planning → Technology Selection → **ApprovedSolution** (docs 02–09);
   - **Architecture Composition** (doc 08): `StackArchitect`, `ArchitectureComposer`, `ArchitectureConflictDetector`, `ArchitectureValidator`;
   - **TeamComposer V2** (doc 10): `TeamComposer` monta a `AgentTeam` por tier de complexidade (LOW/MEDIUM/HIGH), com especialistas condicionais e Integration Unit somente quando há integração real; `TeamValidator` aprova e versiona, aplicando a regra "Reviewer != executor".
-  - 35 testes unitários passando (`npm test`), build TypeScript limpo (`npm run build`).
-- Próximas camadas a implementar seguindo o roadmap do vault: Dynamic Pipeline Composer (11), Job Classification (12), Intelligent Work Router (13), Team Switching e Handoffs (14) — ver [`27 - Slices Prompts Codex e Roadmap.md`](./LDCN_Gerador_Inteligente_Obsidian/27%20-%20Slices%20Prompts%20Codex%20e%20Roadmap.md).
+  - **Dynamic Pipeline Composer** (doc 11): `PipelineComposer` deriva um plano declarativo por stack, encadeia build/test/review/gate/promotion, adiciona validação cross-stack quando necessária e bloqueia runtimes sem suporte.
+  - Job Classification, Intelligent Work Router, Team Switching, Handoffs, Scope Expansion, Learning Intelligence, Context Budgeting, Governance, Replanning, Observability, Decision Events, read models da aplicação, contexto mínimo, dispatcher de execução persistível, sincronização de status externo, guard de território/ferramentas, avaliação persistível de Review Gates, FailureSnapshot, Repair Advisory, Repair Eligibility, auditoria do lifecycle de execução, gravação de outcomes e coordenador de runtime;
+  - 192 testes unitários passando (`npm test`), build TypeScript limpo (`npm run build`), com validação de política de tentativas, limite no dispatch e na elegibilidade de repair, política de retry pós-repair, métricas operacionais por missão, cenário end-to-end de recuperação, validação do runtime port, idempotência do fluxo FailureSnapshot → RepairAdvisory, proteção cross-mission, sanitização de credenciais e omissão de reasoning privado no audit trail, e o guardrail do doc 34 (Executable Mission nunca aprova com zero stacks/team/pipeline).
+- **API NestJS + Prisma/PostgreSQL implementada em `apps/api`** (Slices 1–2 do backend, ver doc 36 §104 no vault `LDCN_OS_Gerador_Backend_Integrado_Obsidian/`): wrapper HTTP fino sobre os serviços já testados de `core/`, com persistência real em Postgres via um adapter "hydrate → roda o core síncrono → flush" (`apps/api/src/persistence/mission-persistence.service.ts`) — necessário porque as interfaces/serviços do `core/` são síncronos e o Prisma é assíncrono.
+  - **Gerador** (`IntelligentGeneratorCommandService`/`IntelligentGeneratorQueryService`): `POST /missions/:id/intelligent-generator/start` e as leituras (`GET /missions/:id/intelligent-generator[...]`), persistindo `DecisionEvent`, `GenerationResult` e `GeneratorMissionState`.
+  - **Routing** (`JobClassifier`/`IntelligentWorkRouter`/`TeamSwitchResolver`, doc 27 Slice 2): `POST /missions/:id/tasks/:taskId/intelligent-routing/classify`, `/route`, `/switch-team`, `GET .../intelligent-routing` e `.../handoffs`. Como esses três serviços não recebem repositório injetável (só Map interno), a idempotência/staleness (`ROUTING_DECISION_STALE`, `TEAM_SWITCH_CONTEXT_STALE`) é replicada na camada Postgres em `routing-persistence.service.ts`, comparando o `contextHash` de um cálculo fresco contra o que já foi persistido.
+  - **Operações**: `GET /missions/:id/operations[...]` delegando para `RuntimeApiController`.
+  - Guard de API key (lido de `infra/.env` via `dotenv`, carregado automaticamente por `main.ts`) + filtro de erro global. Testado com Postgres real (unit + e2e, incluindo o cenário `BLOCKED_NO_REVIEWER` de negócio real, não só o caminho feliz).
+  - **Como rodar:** `npm install` na raiz → `docker compose -f infra/docker-compose.yml up -d` → `npx prisma migrate dev --schema infra/prisma/schema.prisma` → `npm run start:dev -w apps/api` (lê `DATABASE_URL`/`LDCN_API_KEY` de `infra/.env` automaticamente).
+  - **Fora de escopo ainda** (próximas rodadas, seguindo os slices B3–B10 do doc 36): app `apps/brain` separado, auth/tenancy real, SSE, execution runtime (artifacts/workspace/tools), Review/Gate/Repair/Promotion como API, comandos incrementais por etapa do gerador, bootstrap do catálogo de stacks/agentes.
+- ML externo permanece posterior e em shadow mode — ver [`27 - Slices Prompts Codex e Roadmap.md`](./LDCN_OS_Gerador_Backend_Integrado_Obsidian/27%20-%20Slices%20Prompts%20Codex%20e%20Roadmap.md).

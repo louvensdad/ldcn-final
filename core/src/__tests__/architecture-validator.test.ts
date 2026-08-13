@@ -50,7 +50,7 @@ describe('ArchitectureValidator', () => {
     ).toThrow('blocked by 1 critical conflict');
   });
 
-  it('should version approved compositions', () => {
+  it('should make duplicate compositions idempotent', () => {
     const generator = new Generator({ mode: 'AUTO' });
     const result = generator.generate({
       missionId: 'mission-version',
@@ -74,7 +74,7 @@ describe('ArchitectureValidator', () => {
     const second = validator.validateAndApprove(input);
 
     expect(first.version).toBe(1);
-    expect(second.version).toBe(2);
-    expect(validator.getActive(input.missionId)?.id).toBe(second.id);
+    expect(second.version).toBe(1);
+    expect(second.id).toBe(first.id);
   });
 });

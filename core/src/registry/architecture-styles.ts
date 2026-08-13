@@ -22,6 +22,26 @@ export interface ArchitectureStyle {
 
 export const ARCHITECTURE_STYLES: ArchitectureStyle[] = [
   {
+    key: 'mobile-cross-platform',
+    name: 'Mobile Cross-platform',
+    description: 'Shared mobile application with platform adapters and native integration boundaries.',
+    defaultForStacks: ['stack.dart.flutter'],
+    modules: [
+      { name: 'presentation', responsibility: 'Screens, widgets, navigation, and state', exposes: ['screens', 'widgets'], dependsOn: ['application'] },
+      { name: 'application', responsibility: 'Mobile use cases and client orchestration', exposes: ['services', 'state'], dependsOn: ['data'] },
+      { name: 'data', responsibility: 'API clients, local storage, and serializers', exposes: ['clients', 'repositories'], dependsOn: [] },
+    ],
+    communication: ['HTTPS REST', 'Platform channels'],
+    persistence: 'Secure local storage / remote API',
+    deployment: 'Android and iOS application bundles',
+    test: 'Unit, widget, integration, and device tests',
+    build: 'Flutter release build per platform',
+    observability: ['crash reporting', 'performance metrics'],
+    security: ['secure storage', 'certificate validation', 'least-privilege permissions'],
+    tradeoffs: ['Shared codebase', 'platform-specific adapters remain necessary'],
+    risks: ['Native plugin compatibility'],
+  },
+  {
     key: 'modular-monolith',
     name: 'Modular Monolith',
     description: 'Single deployable unit with strongly bounded internal modules.',

@@ -1,0 +1,7 @@
+export type GovernanceErrorCode =
+  | 'GENERATOR_INTENT_NOT_READY' | 'GENERATOR_REQUIREMENTS_NOT_APPROVED'
+  | 'GENERATOR_TOPOLOGY_NOT_APPROVED' | 'GENERATOR_SOLUTION_NOT_APPROVED'
+  | 'GENERATOR_ARCHITECTURE_NOT_APPROVED' | 'GENERATOR_TEAM_NOT_READY'
+  | 'GENERATOR_PIPELINE_NOT_READY' | 'GENERATOR_CONTEXT_STALE';
+
+export interface GovernanceCheck { allowed: boolean; errors: GovernanceErrorCode[]; contextHash: string; }

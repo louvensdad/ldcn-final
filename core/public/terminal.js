@@ -1,0 +1,14 @@
+(() => {
+  const $ = (id) => document.getElementById(id), output = $('output'), mission = $('missionId'), idea = $('idea');
+  let lines = 0; const saved = localStorage.getItem('ldcn-terminal-mission'); if (saved) mission.value = saved;
+  const print = (label, value, error = false) => { lines++; $('lineCount').textContent = `${lines} ${lines === 1 ? 'linha' : 'linhas'}`; const entry = document.createElement('div'); entry.className = `entry${error ? ' error' : ''}`; const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2); entry.innerHTML = `<span class="prompt">λ</span><div><div class="label">${label}</div><pre></pre></div>`; entry.querySelector('pre').textContent = text; output.appendChild(entry); output.scrollTop = output.scrollHeight; };
+  async function call(url, options = {}) { const response = await fetch(url, options); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`); return body; }
+  async function run(command) { const id = mission.value.trim(); localStorage.setItem('ldcn-terminal-mission', id); try { if (command === 'health') return print('health check', await call('/health')); if (!id) throw new Error('Informe um identificador de missão.'); if (command === 'overview') return print(`overview / ${id}`, await call(`/missions/${encodeURIComponent(id)}/overview`)); if (command === 'events') return print(`events / ${id}`, await call(`/missions/${encodeURIComponent(id)}/events`)); const body = await call('/missions', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ missionId:id, rawUserIdea:command }) }); print(`mission created / ${id}`, body); $('sessionId').textContent = id; } catch (e) { print('erro', e.message, true); } }
+  async function health() { try { await call('/health'); $('healthDot').className='dot good'; $('healthText').textContent='runtime online'; } catch { $('healthDot').className='dot bad'; $('healthText').textContent='runtime offline'; } }
+  $('commandForm').addEventListener('submit', e => { e.preventDefault(); const value = idea.value.trim(); if (value) { idea.value=''; run(value); } });
+  document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', () => run(button.dataset.command)));
+  $('clearBtn').addEventListener('click', () => { output.innerHTML=''; lines=0; $('lineCount').textContent='0 linhas'; });
+  idea.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') $('commandForm').requestSubmit(); });
+  document.addEventListener('keydown', e => { if (document.activeElement === idea || document.activeElement === mission) return; const key=e.key.toLowerCase(); if(key==='h') run('health'); if(key==='o') run('overview'); if(key==='e') run('events'); });
+  health();
+})();

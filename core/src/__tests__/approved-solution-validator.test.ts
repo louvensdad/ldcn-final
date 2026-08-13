@@ -77,7 +77,7 @@ describe('ApprovedSolutionValidator', () => {
     ).toThrow('explicit approval');
   });
 
-  it('should version approved solutions and supersede previous', () => {
+  it('should make duplicate approval idempotent', () => {
     const { contract, topology, selection } = buildSelection('Quero uma API REST.');
     const proposal = {
       mode: 'AUTO' as const,
@@ -109,8 +109,20 @@ describe('ApprovedSolutionValidator', () => {
     });
 
     expect(first.version).toBe(1);
-    expect(second.version).toBe(2);
+    expect(second.version).toBe(1);
     expect(second.status).toBe('ACTIVE');
-    expect(validator.getActive('mission-3')?.id).toBe(second.id);
+    expect(second.id).toBe(first.id);
+  });
+
+  it('recognizes equivalent topology instances by context hash', () => {
+    const firstInput = buildSelection('Quero uma API REST.');
+    const proposal = {
+      mode: 'AUTO' as const,
+      selections: firstInput.selection.selections.filter((s) => s.selectedStackKey).map((s) => ({ deliveryTargetKind: s.deliveryTargetKind, stackKey: s.selectedStackKey!, rationale: s.rationale })),
+    };
+    const first = validator.validateAndApprove({ missionId: 'mission-equivalent', topology: firstInput.topology, selectionProposal: proposal, requirementsContractId: firstInput.contract.id, approvedByPolicy: true, kindsRequiringStack });
+    const equivalentTopology = { ...firstInput.topology, id: 'equivalent-topology-id' };
+    const second = validator.validateAndApprove({ missionId: 'mission-equivalent', topology: equivalentTopology, selectionProposal: proposal, requirementsContractId: firstInput.contract.id, approvedByPolicy: true, kindsRequiringStack });
+    expect(second).toBe(first);
   });
 });

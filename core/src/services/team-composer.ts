@@ -39,7 +39,8 @@ export class TeamComposer {
     const instances: AgentInstance[] = [];
     const decisions: TeamCompositionDecision[] = [];
 
-    for (const selectedStack of input.approvedSolution.selectedStacks) {
+    const uniqueSelections = [...new Map(input.approvedSolution.selectedStacks.map((selection) => [selection.stackKey, selection])).values()];
+    for (const selectedStack of uniqueSelections) {
       // Rule 1: somente stacks da ApprovedSolution.
       const stackDefinition = input.registry.get(selectedStack.stackKey);
       if (!stackDefinition) {
