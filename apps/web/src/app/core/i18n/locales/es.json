@@ -1,0 +1,22 @@
+{
+  "shell.home": "Inicio",
+  "shell.login": "Iniciar sesión",
+  "shell.signOut": "Cerrar sesión",
+  "shell.toggleTheme": "Cambiar tema",
+  "shell.language": "Idioma",
+  "home.title": "LDCN OS",
+  "home.subtitle": "Generador Inteligente + Platform Core + Brain Service.",
+  "home.connectionState": "Conexión en tiempo real",
+  "login.title": "Iniciar sesión",
+  "login.apiKeyLabel": "Clave de API",
+  "login.apiKeyHint": "La misma LDCN_API_KEY configurada en infra/.env.",
+  "login.submit": "Iniciar sesión",
+  "common.loading": "Cargando...",
+  "common.error": "Algo salió mal.",
+  "errors.401": "Clave de API inválida o ausente.",
+  "errors.403": "No tienes permiso para eso.",
+  "errors.409": "Esta decisión quedó desactualizada porque la misión cambió.",
+  "errors.429": "Demasiadas solicitudes — espera un momento.",
+  "errors.5xx": "Error del servidor. Inténtalo de nuevo.",
+  "errors.unknown": "Error inesperado."
+}

@@ -1,0 +1,22 @@
+{
+  "shell.home": "Accueil",
+  "shell.login": "Connexion",
+  "shell.signOut": "Déconnexion",
+  "shell.toggleTheme": "Changer de thème",
+  "shell.language": "Langue",
+  "home.title": "LDCN OS",
+  "home.subtitle": "Générateur Intelligent + Platform Core + Brain Service.",
+  "home.connectionState": "Connexion en temps réel",
+  "login.title": "Connexion",
+  "login.apiKeyLabel": "Clé API",
+  "login.apiKeyHint": "La même LDCN_API_KEY configurée dans infra/.env.",
+  "login.submit": "Connexion",
+  "common.loading": "Chargement...",
+  "common.error": "Une erreur est survenue.",
+  "errors.401": "Clé API invalide ou manquante.",
+  "errors.403": "Vous n'avez pas la permission de faire cela.",
+  "errors.409": "Cette décision est obsolète car la mission a changé.",
+  "errors.429": "Trop de requêtes — veuillez patienter.",
+  "errors.5xx": "Erreur serveur. Veuillez réessayer.",
+  "errors.unknown": "Erreur inattendue."
+}

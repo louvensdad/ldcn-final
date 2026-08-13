@@ -1,0 +1,22 @@
+{
+  "shell.home": "Home",
+  "shell.login": "Sign in",
+  "shell.signOut": "Sign out",
+  "shell.toggleTheme": "Toggle theme",
+  "shell.language": "Language",
+  "home.title": "LDCN OS",
+  "home.subtitle": "Intelligent Generator + Platform Core + Brain Service.",
+  "home.connectionState": "Live connection",
+  "login.title": "Sign in",
+  "login.apiKeyLabel": "API key",
+  "login.apiKeyHint": "The same LDCN_API_KEY configured in infra/.env.",
+  "login.submit": "Sign in",
+  "common.loading": "Loading...",
+  "common.error": "Something went wrong.",
+  "errors.401": "Invalid or missing API key.",
+  "errors.403": "You don't have permission to do that.",
+  "errors.409": "This decision is stale because the mission changed.",
+  "errors.429": "Too many requests — please wait.",
+  "errors.5xx": "Server error. Please try again.",
+  "errors.unknown": "Unexpected error."
+}

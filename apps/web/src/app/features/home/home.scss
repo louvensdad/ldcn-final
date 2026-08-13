@@ -1,0 +1,44 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+
+  &__header h1 {
+    margin: 0 0 var(--space-2);
+    font-size: 1.5rem;
+  }
+
+  &__header p {
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__connection {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-2) !important;
+    font-size: 0.8125rem;
+  }
+
+  &__connection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text-muted);
+
+    &--connected {
+      background: var(--color-success);
+    }
+
+    &--reconnecting,
+    &--connecting {
+      background: var(--color-warning);
+    }
+
+    &--disconnected {
+      background: var(--color-danger);
+    }
+  }
+}

@@ -1,0 +1,12 @@
+<section class="home">
+  <header class="home__header">
+    <h1>{{ 'home.title' | translate }}</h1>
+    <p>{{ 'home.subtitle' | translate }}</p>
+    <p class="home__connection">
+      {{ 'home.connectionState' | translate }}: <span [class]="'home__connection-dot home__connection-dot--' + stream.connectionState().toLowerCase()"></span>
+      {{ stream.connectionState() }}
+    </p>
+  </header>
+
+  <app-empty-state title="Workspace" description="Missions will appear here (F1 — Workspace)." />
+</section>

@@ -1,0 +1,12 @@
+<nav class="sidebar" aria-label="Primary">
+  <a class="sidebar__brand" routerLink="/">LDCN OS</a>
+  <ul class="sidebar__list">
+    @for (item of items; track item.path) {
+      <li>
+        <a class="sidebar__link" [routerLink]="item.path" routerLinkActive="sidebar__link--active" [routerLinkActiveOptions]="{ exact: true }">
+          {{ item.labelKey | translate }}
+        </a>
+      </li>
+    }
+  </ul>
+</nav>
