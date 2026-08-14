@@ -1,0 +1,37 @@
+<section class="mission-pipeline">
+  <app-mission-nav [missionId]="missionId()" />
+
+  @if (pipelineResource.isLoading()) {
+    <div class="skeleton-stack" aria-live="polite" role="status">
+      <span class="visually-hidden">{{ 'common.loading' | translate }}</span>
+      <app-skeleton height="1.75rem" width="40%" />
+      <app-skeleton height="1rem" width="90%" />
+      <app-skeleton height="1rem" width="70%" />
+    </div>
+  } @else if (pipelineResource.error()) {
+    <app-error-state [error]="pipelineResource.error()" (retry)="pipelineResource.reload()" />
+  } @else if (pipelineResource.value(); as plan) {
+    <h1>{{ 'pipeline.title' | translate }}</h1>
+    <p class="mission-pipeline__status">{{ plan.status }}</p>
+
+    @if (groups().length) {
+      @for (group of groups(); track group.stackKey) {
+        <div class="mission-pipeline__group">
+          <h2>{{ isIntegrationGroup(group.stackKey) ? ('pipeline.integration' | translate) : group.stackKey }}</h2>
+          <ol class="mission-pipeline__timeline">
+            @for (node of group.nodes; track node.key) {
+              <li class="mission-pipeline__node" [class]="'mission-pipeline__node--' + node.state.toLowerCase()">
+                <span class="mission-pipeline__node-type">{{ node.type }}</span>
+                @if (node.blockedReason) {
+                  <span class="mission-pipeline__node-reason">{{ node.blockedReason }}</span>
+                }
+              </li>
+            }
+          </ol>
+        </div>
+      }
+    } @else {
+      <app-empty-state [title]="'pipeline.empty' | translate" />
+    }
+  }
+</section>

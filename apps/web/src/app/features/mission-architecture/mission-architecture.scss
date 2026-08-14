@@ -1,0 +1,129 @@
+.mission-architecture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  max-width: 800px;
+
+  h1 {
+    margin: 0;
+    font-size: 1.375rem;
+  }
+
+  &__conflicts {
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+
+    h2 {
+      margin: 0 0 var(--space-2);
+      font-size: 0.9375rem;
+    }
+  }
+
+  &__conflict {
+    padding: var(--space-2) 0;
+
+    & + & {
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+    }
+  }
+
+  &__conflict-topic {
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__conflict-resolution {
+    margin: var(--space-1) 0 0;
+    font-style: italic;
+  }
+
+  &__proposal {
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  &__proposal-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+
+    h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-family: monospace;
+    }
+  }
+
+  &__style {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-raised);
+    color: var(--color-accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  &__section h3 {
+    margin: 0 0 var(--space-2);
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-text-muted);
+  }
+
+  &__section ul {
+    margin: 0;
+    padding-left: var(--space-4);
+    font-size: 0.875rem;
+  }
+
+  &__decision-card {
+    padding: var(--space-3);
+    background: var(--color-surface-raised);
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+
+    & + & {
+      margin-top: var(--space-2);
+    }
+  }
+
+  &__decision-problem {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  &__decision-selected {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  &__decision-rationale {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  &__decision-tradeoffs {
+    margin: 0;
+    padding-left: var(--space-4);
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  &__decision-by {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+}

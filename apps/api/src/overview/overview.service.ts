@@ -1,6 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MissionPersistenceService } from '../persistence/mission-persistence.service';
 import { OperationPersistenceService } from '../operations/operation-persistence.service';
+import { PrismaService } from '../persistence/prisma.service';
+
+export interface MissionSummaryDto {
+  missionId: string;
+  generatorState?: string;
+  rawUserIdea: string;
+  nextAction: string;
+  blockers: string[];
+  updatedAt: Date;
+}
 
 /**
  * doc 36 §70 (MissionOverviewReadModel), trimmed to what this system actually produces today.
@@ -10,7 +20,43 @@ import { OperationPersistenceService } from '../operations/operation-persistence
  */
 @Injectable()
 export class OverviewService {
-  constructor(private readonly missionPersistence: MissionPersistenceService, private readonly operations: OperationPersistenceService) {}
+  constructor(
+    private readonly missionPersistence: MissionPersistenceService,
+    private readonly operations: OperationPersistenceService,
+    private readonly prisma: PrismaService
+  ) {}
+
+  /**
+   * F1 - Workspace needs a way to enumerate missions; nothing exposed that before (every other
+   * read endpoint takes a known missionId). GeneratorMissionState already has one row per
+   * mission (written by MissionPersistenceService#flush on the success path of generate()), so
+   * this is the natural source instead of a new table. Fine at dev/demo scale — no pagination
+   * cursor yet, just a `take` limit.
+   */
+  async listMissions(limit = 50): Promise<MissionSummaryDto[]> {
+    const states = await this.prisma.generatorMissionState.findMany({ orderBy: { updatedAt: 'desc' }, take: limit });
+    const summaries = await Promise.all(
+      states.map(async (state): Promise<MissionSummaryDto | undefined> => {
+        try {
+          const overview = await this.getOverview(state.missionId);
+          return {
+            missionId: state.missionId,
+            generatorState: overview.generatorState,
+            rawUserIdea: overview.intentSummary.rawUserIdea,
+            nextAction: overview.nextAction,
+            blockers: overview.blockers,
+            updatedAt: state.updatedAt,
+          };
+        } catch {
+          // A GeneratorMissionState row with no matching GenerationResult shouldn't happen
+          // (both are written together in the same flush), but skip defensively rather than
+          // fail the whole list over one inconsistent row.
+          return undefined;
+        }
+      })
+    );
+    return summaries.filter((summary): summary is MissionSummaryDto => summary !== undefined);
+  }
 
   async getOverview(missionId: string) {
     const session = await this.missionPersistence.hydrate(missionId);

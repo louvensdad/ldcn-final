@@ -1,0 +1,15 @@
+@for (event of events(); track event.id) {
+  <div class="event-timeline__event">
+    <div class="event-timeline__event-header">
+      <span class="event-timeline__event-type">{{ event.eventType }}</span>
+      <span class="event-timeline__event-time">{{ formatEventTime(event.createdAt) }}</span>
+    </div>
+    @if (payloadEntries(event.payload).length) {
+      <div class="event-timeline__event-payload">
+        @for (entry of payloadEntries(event.payload); track entry[0]) {
+          <span class="event-timeline__event-payload-entry">{{ entry[0] }}: {{ entry[1] }}</span>
+        }
+      </div>
+    }
+  </div>
+}

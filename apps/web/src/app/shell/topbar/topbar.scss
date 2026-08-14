@@ -1,3 +1,5 @@
+@use '../../../styles/breakpoints' as bp;
+
 .topbar {
   display: flex;
   align-items: center;
@@ -6,6 +8,13 @@
   padding: 0 var(--space-4);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
+
+  @media (max-width: bp.$breakpoint-mobile) {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    padding: var(--space-2) var(--space-4);
+  }
 
   &__spacer {
     flex: 1;

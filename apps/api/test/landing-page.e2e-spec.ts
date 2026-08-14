@@ -66,6 +66,10 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     expect(missionOverview.body.blockers).toEqual([]);
     expect(missionOverview.body.currentOperation.id).toBe(start.body.operationId);
 
+    const missionList = await request(app.getHttpServer()).get('/missions').expect(200);
+    const listed = missionList.body.find((mission: { missionId: string }) => mission.missionId === missionId);
+    expect(listed).toMatchObject({ missionId, rawUserIdea: 'quero uma landing page', nextAction: 'START_EXECUTION', blockers: [] });
+
     await request(app.getHttpServer())
       .post(`/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero uma landing page' })

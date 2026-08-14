@@ -1,0 +1,61 @@
+<section class="mission-repair">
+  <app-mission-nav [missionId]="missionId()" />
+
+  @if (missionResource.isLoading()) {
+    <div class="skeleton-stack" aria-live="polite" role="status">
+      <span class="visually-hidden">{{ 'common.loading' | translate }}</span>
+      <app-skeleton height="1.75rem" width="40%" />
+      <app-skeleton height="1rem" width="90%" />
+      <app-skeleton height="1rem" width="70%" />
+    </div>
+  } @else if (missionResource.error()) {
+    <app-error-state [error]="missionResource.error()" (retry)="missionResource.reload()" />
+  } @else if (missionResource.value(); as data) {
+    <header class="mission-repair__header">
+      <h1>{{ 'repair.title' | translate }}</h1>
+      <app-button variant="primary" (pressed)="openClassifyDialog()">{{ 'repair.classifyFailure' | translate }}</app-button>
+    </header>
+
+    @if (approveError(); as err) {
+      <app-error-state [error]="err" (retry)="approveError.set(null)" />
+    }
+
+    @if (data.repairTasks.length || repairEvents().length) {
+      @if (data.repairTasks.length) {
+        <div class="mission-repair__section">
+          <h2>{{ 'repair.tasks' | translate }}</h2>
+          @for (task of data.repairTasks; track task.taskId) {
+            <div class="mission-repair__task">
+              <span class="mission-repair__task-id">{{ task.taskId }}</span>
+              @if (task.failureCategory) {
+                <span class="mission-repair__task-badge">{{ task.failureCategory }}</span>
+              }
+              @if (task.failureCode) {
+                <span class="mission-repair__task-code">{{ task.failureCode }}</span>
+              }
+              <span class="mission-repair__task-next">{{ task.nextAction }}</span>
+              @if (task.nextAction === 'APPROVE_REPAIR') {
+                <app-button variant="secondary" [disabled]="approvingTaskId() === task.taskId" (pressed)="approve(task.taskId)">
+                  {{ 'repair.approve' | translate }}
+                </app-button>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      @if (repairEvents().length) {
+        <div class="mission-repair__section">
+          <h2>{{ 'repair.timeline' | translate }}</h2>
+          <app-event-timeline [events]="repairEvents()" />
+        </div>
+      }
+    } @else {
+      <app-empty-state [title]="'repair.empty' | translate" />
+    }
+
+    @if (dialogOpen()) {
+      <app-classify-failure-dialog [missionId]="missionId()" (closed)="onDialogClosed()" />
+    }
+  }
+</section>

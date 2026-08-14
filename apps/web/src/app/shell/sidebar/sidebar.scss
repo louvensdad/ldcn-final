@@ -1,3 +1,5 @@
+@use '../../../styles/breakpoints' as bp;
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -8,11 +10,21 @@
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
 
+  @media (max-width: bp.$breakpoint-mobile) {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
   &__brand {
     font-weight: 700;
     font-size: 1rem;
     color: var(--color-text);
     text-decoration: none;
+    flex-shrink: 0;
   }
 
   &__list {
@@ -22,6 +34,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
+
+    @media (max-width: bp.$breakpoint-mobile) {
+      flex-direction: row;
+    }
   }
 
   &__link {

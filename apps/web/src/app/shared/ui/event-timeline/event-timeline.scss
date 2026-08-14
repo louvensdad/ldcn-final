@@ -1,0 +1,45 @@
+:host {
+  display: block;
+}
+
+.event-timeline {
+  &__event {
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+
+    & + & {
+      margin-top: var(--space-2);
+    }
+  }
+
+  &__event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  &__event-type {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  &__event-time {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  &__event-payload {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+  }
+
+  &__event-payload-entry {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-family: monospace;
+  }
+}

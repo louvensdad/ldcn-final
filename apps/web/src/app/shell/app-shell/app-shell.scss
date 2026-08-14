@@ -1,6 +1,13 @@
+@use '../../../styles/breakpoints' as bp;
+
 .app-shell {
   display: flex;
   min-height: 100vh;
+
+  @media (max-width: bp.$breakpoint-mobile) {
+    flex-direction: column;
+    min-height: 0;
+  }
 
   &__main {
     flex: 1;

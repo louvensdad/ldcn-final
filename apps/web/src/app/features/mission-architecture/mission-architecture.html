@@ -1,0 +1,78 @@
+<section class="mission-architecture">
+  <app-mission-nav [missionId]="missionId()" />
+
+  @if (architectureResource.isLoading()) {
+    <div class="skeleton-stack" aria-live="polite" role="status">
+      <span class="visually-hidden">{{ 'common.loading' | translate }}</span>
+      <app-skeleton height="1.75rem" width="40%" />
+      <app-skeleton height="1rem" width="90%" />
+      <app-skeleton height="1rem" width="70%" />
+    </div>
+  } @else if (architectureResource.error()) {
+    <app-error-state [error]="architectureResource.error()" (retry)="architectureResource.reload()" />
+  } @else if (architectureResource.value(); as data) {
+    <h1>{{ 'architecture.title' | translate }}</h1>
+
+    @if (data.conflicts.length) {
+      <div class="mission-architecture__conflicts">
+        <h2>{{ 'architecture.conflicts' | translate }}</h2>
+        @for (conflict of data.conflicts; track conflict.id) {
+          <div class="mission-architecture__conflict">
+            <p class="mission-architecture__conflict-topic">{{ conflict.topic }} · {{ conflict.severity }}</p>
+            <p>{{ conflict.description }}</p>
+            @if (conflict.resolution) {
+              <p class="mission-architecture__conflict-resolution">{{ conflict.resolution }}</p>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    @if (data.proposals.length) {
+      @for (proposal of data.proposals; track proposal.id) {
+        <article class="mission-architecture__proposal">
+          <header class="mission-architecture__proposal-header">
+            <h2>{{ proposal.stackKey }}</h2>
+            <span class="mission-architecture__style">{{ proposal.architectureStyle }}</span>
+          </header>
+
+          @if (proposal.modules.length) {
+            <div class="mission-architecture__section">
+              <h3>{{ 'architecture.modules' | translate }}</h3>
+              <ul>
+                @for (module of proposal.modules; track module.name) {
+                  <li><strong>{{ module.name }}</strong> — {{ module.responsibility }}</li>
+                }
+              </ul>
+            </div>
+          }
+
+          @if (proposal.decisions.length) {
+            <div class="mission-architecture__section">
+              <h3>{{ 'architecture.decisions' | translate }}</h3>
+              @for (decision of proposal.decisions; track decision.id) {
+                <div class="mission-architecture__decision-card">
+                  <p class="mission-architecture__decision-problem">{{ decision.problem }}</p>
+                  <p class="mission-architecture__decision-selected">{{ decision.selectedOption }}</p>
+                  <p class="mission-architecture__decision-rationale">{{ decision.rationale }}</p>
+                  @if (decision.tradeoffs.length) {
+                    <ul class="mission-architecture__decision-tradeoffs">
+                      @for (tradeoff of decision.tradeoffs; track tradeoff) {
+                        <li>{{ tradeoff }}</li>
+                      }
+                    </ul>
+                  }
+                  <p class="mission-architecture__decision-by">{{ decision.decidedBy }}</p>
+
+                  <app-explain-with-ai [state]="explainStateFor(decision.id)" (triggerExplain)="explain(decision.id)" (retryExplain)="explain(decision.id)" />
+                </div>
+              }
+            </div>
+          }
+        </article>
+      }
+    } @else {
+      <app-empty-state [title]="'architecture.empty' | translate" />
+    }
+  }
+</section>

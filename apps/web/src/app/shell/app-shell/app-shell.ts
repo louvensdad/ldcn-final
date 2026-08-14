@@ -4,10 +4,11 @@ import { EventStreamService } from '../../core/sse/event-stream.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { SidebarComponent } from '../sidebar/sidebar';
 import { TopbarComponent } from '../topbar/topbar';
+import { CommandPaletteComponent } from '../command-palette/command-palette';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, SidebarComponent, TopbarComponent],
+  imports: [RouterOutlet, SidebarComponent, TopbarComponent, CommandPaletteComponent],
   templateUrl: './app-shell.html',
   styleUrl: './app-shell.scss',
 })

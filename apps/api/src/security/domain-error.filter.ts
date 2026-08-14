@@ -12,6 +12,8 @@ const CONFLICT_CODES = new Set([
 
 const NOT_FOUND_CODES = new Set(['MISSION_NOT_FOUND']);
 
+const SERVICE_UNAVAILABLE_CODES = new Set(['AI_EXPLANATION_UNAVAILABLE']);
+
 /**
  * Normalizes errors raised by the framework-neutral core services (plain `Error` whose
  * message is a stable domain code, e.g. GENERATOR_COMMAND_CONFLICT) into HTTP responses.
@@ -30,7 +32,7 @@ export class DomainErrorFilter implements ExceptionFilter {
     }
 
     const code = exception instanceof Error ? exception.message : 'INTERNAL_ERROR';
-    const status = CONFLICT_CODES.has(code) ? 409 : NOT_FOUND_CODES.has(code) ? 404 : 400;
+    const status = CONFLICT_CODES.has(code) ? 409 : NOT_FOUND_CODES.has(code) ? 404 : SERVICE_UNAVAILABLE_CODES.has(code) ? 503 : 400;
     response.status(status).json({ error: code });
   }
 }

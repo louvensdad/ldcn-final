@@ -1,0 +1,35 @@
+<section class="mission-ai-usage">
+  <app-mission-nav [missionId]="missionId()" />
+
+  @if (eventsResource.isLoading()) {
+    <p aria-live="polite" role="status">{{ 'common.loading' | translate }}</p>
+  } @else if (eventsResource.error()) {
+    <app-error-state [error]="eventsResource.error()" (retry)="eventsResource.reload()" />
+  } @else {
+    <h1>{{ 'aiUsage.title' | translate }}</h1>
+
+    @if (aiEvents().length) {
+      <div class="mission-ai-usage__summary">
+        <div class="mission-ai-usage__stat">
+          <span class="mission-ai-usage__stat-value">{{ summary().count }}</span>
+          <span class="mission-ai-usage__stat-label">{{ 'aiUsage.summary.count' | translate }}</span>
+        </div>
+        <div class="mission-ai-usage__stat">
+          <span class="mission-ai-usage__stat-value">{{ summary().totalTokens }}</span>
+          <span class="mission-ai-usage__stat-label">{{ 'aiUsage.summary.totalTokens' | translate }}</span>
+        </div>
+        <div class="mission-ai-usage__stat">
+          <span class="mission-ai-usage__stat-value">{{ summary().avgLatency }}ms</span>
+          <span class="mission-ai-usage__stat-label">{{ 'aiUsage.summary.avgLatency' | translate }}</span>
+        </div>
+      </div>
+
+      <div class="mission-ai-usage__section">
+        <h2>{{ 'aiUsage.timeline' | translate }}</h2>
+        <app-event-timeline [events]="aiEvents()" />
+      </div>
+    } @else {
+      <app-empty-state [title]="'aiUsage.empty' | translate" />
+    }
+  }
+</section>

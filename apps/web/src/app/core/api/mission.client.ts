@@ -25,9 +25,23 @@ export interface MissionOverviewDto {
   blockers: string[];
 }
 
+/** apps/api MissionsController#list response (doc 44 F1 - Workspace). */
+export interface MissionSummaryDto {
+  missionId: string;
+  generatorState?: string;
+  rawUserIdea: string;
+  nextAction: string;
+  blockers: string[];
+  updatedAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class MissionClient {
   private readonly api = inject(ApiClient);
+
+  list(): Observable<MissionSummaryDto[]> {
+    return this.api.get<MissionSummaryDto[]>('/missions');
+  }
 
   getOverview(missionId: string): Observable<MissionOverviewDto> {
     return this.api.get<MissionOverviewDto>(`/missions/${missionId}/overview`);

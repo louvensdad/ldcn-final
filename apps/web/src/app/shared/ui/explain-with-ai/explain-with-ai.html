@@ -1,0 +1,12 @@
+@if (state().status === 'idle') {
+  <app-button variant="ghost" (pressed)="triggerExplain.emit()">{{ 'architecture.explainWithAi' | translate }}</app-button>
+} @else if (state().status === 'loading') {
+  <p class="explain-with-ai__loading" aria-live="polite" role="status">{{ 'architecture.aiAnalyzing' | translate }}</p>
+} @else if (state().status === 'done') {
+  <div class="explain-with-ai__explanation">
+    <p class="explain-with-ai__text">{{ state().explanation }}</p>
+    <p class="explain-with-ai__usage">{{ 'architecture.aiUsageLabel' | translate }} {{ state().usage?.model }} · {{ state().usage?.totalTokens }} tokens · {{ state().usage?.latencyMs }}ms</p>
+  </div>
+} @else if (state().status === 'error') {
+  <app-error-state [error]="state().error" (retry)="retryExplain.emit()" />
+}

@@ -1,0 +1,69 @@
+@if (step() === 'form') {
+  <section class="wizard">
+    <h1>{{ 'wizard.title' | translate }}</h1>
+    <p class="wizard__subtitle">{{ 'wizard.subtitle' | translate }}</p>
+
+    <form class="wizard__form" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="wizard__field">
+        <span>{{ 'wizard.ideaLabel' | translate }}</span>
+        <textarea formControlName="rawUserIdea" rows="4"></textarea>
+      </label>
+
+      <button type="button" class="wizard__advanced-toggle" (click)="toggleAdvanced()">
+        {{ (advancedOpen() ? 'wizard.hideAdvanced' : 'wizard.showAdvanced') | translate }}
+      </button>
+
+      @if (advancedOpen()) {
+        <div class="wizard__advanced">
+          <label class="wizard__field">
+            <span>{{ 'wizard.techPreferencesLabel' | translate }}</span>
+            <input type="text" formControlName="technologyPreferences" [placeholder]="'wizard.commaHint' | translate" />
+          </label>
+
+          <fieldset class="wizard__targets">
+            <legend>{{ 'wizard.forbiddenTargetsLabel' | translate }}</legend>
+            @for (target of deliveryTargets; track target) {
+              <label class="wizard__checkbox">
+                <input type="checkbox" [checked]="forbiddenTargets().has(target)" (change)="toggleTarget(target)" />
+                {{ target }}
+              </label>
+            }
+          </fieldset>
+
+          <label class="wizard__field">
+            <span>{{ 'wizard.constraintsLabel' | translate }}</span>
+            <input type="text" formControlName="constraints" [placeholder]="'wizard.commaHint' | translate" />
+          </label>
+        </div>
+      }
+
+      @if (error(); as err) {
+        <p class="wizard__error">{{ err.translationKey | translate }}</p>
+      }
+
+      <app-button variant="primary" type="submit" [disabled]="form.invalid || submitting()">
+        {{ (submitting() ? 'common.loading' : 'wizard.submit') | translate }}
+      </app-button>
+    </form>
+  </section>
+} @else if (overview(); as data) {
+  <section class="wizard wizard--recap">
+    <h1>{{ 'wizard.recapTitle' | translate }}</h1>
+
+    <app-mission-overview-cards [overview]="data" />
+
+    <div class="wizard__card wizard__card--result">
+      <h2>{{ 'wizard.section.result' | translate }}</h2>
+      <p class="wizard__next-action">{{ data.nextAction }}</p>
+      @if (data.blockers.length) {
+        <ul>
+          @for (blocker of data.blockers; track blocker) {
+            <li>{{ blocker }}</li>
+          }
+        </ul>
+      }
+    </div>
+
+    <app-button variant="primary" (pressed)="goToWorkspace()">{{ 'wizard.backToWorkspace' | translate }}</app-button>
+  </section>
+}

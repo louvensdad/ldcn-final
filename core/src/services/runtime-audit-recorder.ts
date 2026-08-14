@@ -31,7 +31,10 @@ export class RuntimeAuditRecorder {
   }
 
   recordRepairEligibility(decision: RepairEligibilityDecision): GeneratorDecisionEvent {
-    return this.events.append({ missionId: decision.missionId, eventType: 'REPAIR_ELIGIBILITY_EVALUATED', aggregateType: 'RepairEligibilityDecision', aggregateId: decision.id, idempotencyKey: `repair-eligibility:${decision.missionId}:${decision.taskId}:${decision.attemptCount}:${decision.maxAttempts}:${decision.requiresApproval}`, payload: { taskId: decision.taskId, status: decision.status, attemptCount: decision.attemptCount, maxAttempts: decision.maxAttempts, requiresApproval: decision.requiresApproval } });
+    // status is part of the key: a BLOCKED evaluation and the ELIGIBLE one after approval share
+    // the same missionId/taskId/attemptCount/maxAttempts/requiresApproval, but are genuinely
+    // different decisions and must not collide on the DecisionEvent.idempotencyKey unique index.
+    return this.events.append({ missionId: decision.missionId, eventType: 'REPAIR_ELIGIBILITY_EVALUATED', aggregateType: 'RepairEligibilityDecision', aggregateId: decision.id, idempotencyKey: `repair-eligibility:${decision.missionId}:${decision.taskId}:${decision.attemptCount}:${decision.maxAttempts}:${decision.requiresApproval}:${decision.status}`, payload: { taskId: decision.taskId, status: decision.status, attemptCount: decision.attemptCount, maxAttempts: decision.maxAttempts, requiresApproval: decision.requiresApproval } });
   }
 
   recordRepairOutcome(input: { missionId: string; taskId: string; advisoryContextHash: string; success: boolean; repairCount?: number }): GeneratorDecisionEvent {

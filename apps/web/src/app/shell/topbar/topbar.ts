@@ -4,6 +4,7 @@ import { TranslationService, SUPPORTED_LOCALES, Locale } from '../../core/i18n/t
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { AuthService } from '../../core/auth/auth.service';
 import { ButtonComponent } from '../../shared/ui/button/button';
+import { CommandPaletteService } from '../../core/command-palette/command-palette.service';
 
 @Component({
   selector: 'app-topbar',
@@ -15,9 +16,14 @@ export class TopbarComponent {
   private readonly theme = inject(ThemeService);
   private readonly translation = inject(TranslationService);
   private readonly auth = inject(AuthService);
+  private readonly commandPalette = inject(CommandPaletteService);
 
   protected readonly locales = SUPPORTED_LOCALES;
   protected readonly currentLocale = this.translation.locale;
+
+  openCommandPalette(): void {
+    this.commandPalette.open();
+  }
 
   toggleTheme(): void {
     this.theme.toggle();

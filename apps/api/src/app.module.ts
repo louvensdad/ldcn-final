@@ -5,12 +5,15 @@ import { RuntimeModule } from './runtime/runtime.module';
 import { RoutingModule } from './routing/routing.module';
 import { OperationsModule } from './operations/operations.module';
 import { OverviewModule } from './overview/overview.module';
+import { RepairModule } from './repair/repair.module';
+import { AssistantModule } from './assistant/assistant.module';
+import { GateModule } from './gates/gate.module';
 import { HealthController } from './health/health.controller';
 import { ApiKeyGuard } from './security/api-key.guard';
 import { DomainErrorFilter } from './security/domain-error.filter';
 
 @Module({
-  imports: [GeneratorModule, RuntimeModule, RoutingModule, OperationsModule, OverviewModule],
+  imports: [GeneratorModule, RuntimeModule, RoutingModule, OperationsModule, OverviewModule, RepairModule, AssistantModule, GateModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ApiKeyGuard },

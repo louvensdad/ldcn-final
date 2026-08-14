@@ -130,4 +130,37 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
       await cleanup(missionId);
     }
   });
+
+  it('listTasks() dedupes by taskId (keeping the most recent classification) and enriches with routing status', async () => {
+    const missionId = `test-${randomUUID()}`;
+    try {
+      await seedMission(missionId, 'quero uma landing page');
+      await routing.classify(missionId, 'task-1', { description: 'Implementar hero section' });
+      await routing.classify(missionId, 'task-1', { description: 'Implementar hero section com SEO' });
+      await routing.classify(missionId, 'task-2', { description: 'Ajustar meta tags' });
+      await routing.route(missionId, 'task-1');
+
+      const tasks = await routing.listTasks(missionId);
+      expect(tasks).toHaveLength(2);
+
+      const task1 = tasks.find((task) => task.taskId === 'task-1');
+      expect(task1?.classification.contextHash).toBeDefined();
+      expect(task1?.routingStatus).toBeDefined();
+
+      const task2 = tasks.find((task) => task.taskId === 'task-2');
+      expect(task2?.routingStatus).toBeUndefined();
+    } finally {
+      await cleanup(missionId);
+    }
+  });
+
+  it('listTasks() returns an empty array for a mission with no classified tasks', async () => {
+    const missionId = `test-${randomUUID()}`;
+    try {
+      await seedMission(missionId, 'quero uma landing page');
+      expect(await routing.listTasks(missionId)).toEqual([]);
+    } finally {
+      await cleanup(missionId);
+    }
+  });
 });

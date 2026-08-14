@@ -20,6 +20,12 @@ export interface ClassifyInput {
   stackKey?: string;
 }
 
+export interface TaskSummary {
+  taskId: string;
+  classification: JobClassification;
+  routingStatus?: WorkRoutingDecision['status'];
+}
+
 export interface SwitchTeamInput {
   sourceTeamKey: string;
   targetTeamKey: string;
@@ -98,6 +104,27 @@ export class RoutingPersistenceService {
       data: { id: fresh.id, missionId, taskId, switchKey, detailJson: fresh as unknown as Prisma.InputJsonValue },
     });
     return fresh;
+  }
+
+  /**
+   * F5 - Task board: nothing lists which tasks exist for a mission today (classify/route/
+   * switch-team/overview/handoffs all require an already-known taskId). Every task goes
+   * through classify() first, so JobClassificationRecord is the right source — same shape as
+   * OverviewService#listMissions in the overview module (dedupe by key, take the most recent
+   * row, enrich with a second lookup).
+   */
+  async listTasks(missionId: string): Promise<TaskSummary[]> {
+    const rows = await this.prisma.jobClassificationRecord.findMany({ where: { missionId }, orderBy: { createdAt: 'desc' } });
+    const seen = new Set<string>();
+    const tasks: TaskSummary[] = [];
+    for (const row of rows) {
+      if (seen.has(row.taskId)) continue;
+      seen.add(row.taskId);
+      const classification = row.detailJson as unknown as JobClassification;
+      const routing = await this.getRouting(missionId, row.taskId);
+      tasks.push({ taskId: row.taskId, classification, routingStatus: routing?.status });
+    }
+    return tasks;
   }
 
   async getOverview(missionId: string, taskId: string) {

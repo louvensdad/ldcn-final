@@ -43,7 +43,10 @@ export class ReviewGateEvaluator {
       const item = byGate.get(key);
       return !!item && (!item.passed || item.evidenceRefs.length === 0);
     });
-    const invalidReviewer = evidence.some((item) => item.reviewerAgentInstanceId === decision.executorAgentInstanceId || item.executorAgentInstanceId === item.reviewerAgentInstanceId);
+    // The second half only fires when BOTH ids are actually provided and equal — evidence that
+    // simply omits both fields (neither reviewer nor executor identified) isn't a self-review,
+    // it's just unspecified, and must not force BLOCKED on every submission that omits them.
+    const invalidReviewer = evidence.some((item) => item.reviewerAgentInstanceId === decision.executorAgentInstanceId || (!!item.executorAgentInstanceId && item.executorAgentInstanceId === item.reviewerAgentInstanceId));
     const evaluatedGateKeys = required.filter((key) => byGate.has(key));
     const evidenceRefs = [...new Set(evidence.flatMap((item) => item.evidenceRefs))];
     const status = invalidReviewer || missingGateKeys.length > 0 || duplicateGateKeys.length > 0 || unauthorizedReviewerAgentIds.length > 0 || unexpectedGateKeys.length > 0 ? 'BLOCKED' : failedGateKeys.length > 0 ? 'FAILED' : 'PASSED';

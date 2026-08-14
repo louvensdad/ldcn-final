@@ -1,5 +1,7 @@
 // Design tokens (doc 39 - Design System Premium). Light palette lives on bare :root;
 // dark overrides system preference first, then an explicit [data-theme] wins either way.
+@use './breakpoints' as bp;
+
 :root {
   --color-bg: #f7f7f8;
   --color-surface: #ffffff;
@@ -68,4 +70,12 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
+}
+
+// Every feature page's root container uses padding: var(--space-8) — redefining the token here
+// shrinks all of them at once on narrow viewports instead of touching each feature's SCSS file.
+@media (max-width: bp.$breakpoint-mobile) {
+  :root {
+    --space-8: 16px;
+  }
 }

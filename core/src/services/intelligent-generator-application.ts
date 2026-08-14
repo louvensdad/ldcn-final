@@ -32,7 +32,15 @@ export class IntelligentGeneratorCommandService {
     this.results.set(input.missionId, result);
     this.commandFingerprints.set(input.missionId, fingerprint);
     this.resultRepository.save(input.missionId, { fingerprint, result });
-    const finalState = this.advanceState(input.missionId, result.governance.allowed);
+    // Same doc 34 guardrail as getGeneratorOverview() below: a Mission whose solution ended up
+    // with zero selected stacks / zero pipeline nodes is not actually executable, even when
+    // governance.allowed is true (empty-but-APPROVED is a legitimate status combination — see
+    // TeamValidator's "empty AgentTeam is valid" comment). Without this, the *persisted*
+    // GeneratorMissionState.state (what GET .../overview's generatorState reflects, e.g. for
+    // the frontend's Stage Rail) could say READY_FOR_EXECUTION while the read model correctly
+    // said SOLUTION_SELECTION_REQUIRED — the two must agree.
+    const executable = result.approvedSolution.selectedStacks.length > 0 && result.pipeline.nodes.length > 0;
+    const finalState = this.advanceState(input.missionId, result.governance.allowed && executable);
     const recorded = [
       this.events.append({ missionId: input.missionId, eventType: 'INTENT_ANALYZED', aggregateType: 'ProjectIntent', aggregateId: result.intent.id, idempotencyKey: `intent:${input.missionId}:${result.intent.version}` }),
       this.events.append({ missionId: input.missionId, eventType: 'REQUIREMENTS_APPROVED', aggregateType: 'RequirementsContract', aggregateId: result.contract.id, idempotencyKey: `requirements:${input.missionId}:${result.contract.version}` }),
@@ -155,9 +163,17 @@ export class IntelligentGeneratorQueryService {
     const result = this.results.get(missionId);
     if (!result) return undefined;
     const blockedPipelineNodeCount = result.pipeline.nodes.filter((node) => node.state === 'BLOCKED_UNSUPPORTED_RUNTIME').length;
+    // doc 34 guardrail: an Executable Mission must never report READY_FOR_EXECUTION with zero
+    // selected stacks/pipeline nodes. This used to only be caught for the exact "landing page"
+    // keyword match (topology-resolver.ts) — any idea the intent analyzer couldn't map to a
+    // required DeliveryTarget (a typo, a different phrasing, a genuinely vague idea) fell
+    // through this read model as a false "ready" with nothing to execute. Checked here, at the
+    // read-model boundary, so it holds regardless of *why* the solution ended up empty.
+    const solutionIncomplete = result.approvedSolution.selectedStacks.length === 0 || result.pipeline.nodes.length === 0;
+    const blocked = blockedPipelineNodeCount > 0 || !result.governance.allowed;
     return {
       missionId,
-      status: blockedPipelineNodeCount > 0 || !result.governance.allowed ? 'BLOCKED' : 'READY_FOR_EXECUTION',
+      status: solutionIncomplete ? 'SOLUTION_SELECTION_REQUIRED' : blocked ? 'BLOCKED' : 'READY_FOR_EXECUTION',
       intentVersion: result.intent.version,
       solutionVersion: result.approvedSolution.version,
       architectureVersion: result.architectureComposition.version,
@@ -166,7 +182,7 @@ export class IntelligentGeneratorQueryService {
       approvedStackCount: result.approvedSolution.selectedStacks.length,
       pipelineNodeCount: result.pipeline.nodes.length,
       blockedPipelineNodeCount,
-      nextAction: blockedPipelineNodeCount > 0 || !result.governance.allowed ? 'NONE' : 'START_EXECUTION',
+      nextAction: solutionIncomplete ? 'RESOLVE_SOLUTION_SELECTION' : blocked ? 'NONE' : 'START_EXECUTION',
     };
   }
 }

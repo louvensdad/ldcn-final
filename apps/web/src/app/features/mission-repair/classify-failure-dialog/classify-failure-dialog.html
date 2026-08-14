@@ -1,0 +1,20 @@
+<div class="dialog-backdrop" (click)="cancel()" (keydown.escape)="cancel()">
+  <form #dialogRef class="dialog" role="dialog" aria-modal="true" aria-labelledby="classify-failure-dialog-title" [formGroup]="form" (ngSubmit)="submit()" (click)="$event.stopPropagation()" (keydown)="onKeydown($event)">
+    <h2 class="dialog__title" id="classify-failure-dialog-title">{{ 'repair.classifyFailure' | translate }}</h2>
+    <label class="dialog__field">
+      <span>{{ 'repair.taskIdLabel' | translate }}</span>
+      <input type="text" formControlName="taskId" autofocus />
+    </label>
+    <label class="dialog__field">
+      <span>{{ 'repair.summaryLabel' | translate }}</span>
+      <textarea formControlName="summary" rows="3"></textarea>
+    </label>
+    @if (error(); as err) {
+      <p class="dialog__error">{{ err.translationKey | translate }}</p>
+    }
+    <div class="dialog__actions">
+      <app-button variant="ghost" type="button" (pressed)="cancel()">{{ 'common.cancel' | translate }}</app-button>
+      <app-button variant="primary" type="submit" [disabled]="form.invalid || submitting()">{{ 'repair.classify' | translate }}</app-button>
+    </div>
+  </form>
+</div>
