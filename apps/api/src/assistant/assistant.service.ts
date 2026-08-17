@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { AppendDecisionEventInput, ArchitectureDecision, TeamCompositionDecision, WorkRoutingDecision } from 'ldcn-core';
+import { AppendDecisionEventInput, ArchitectureDecision, RepairAdvisory, TeamCompositionDecision, WorkRoutingDecision } from 'ldcn-core';
 import { PrismaService } from '../persistence/prisma.service';
 import { MissionPersistenceService } from '../persistence/mission-persistence.service';
 import { GeneratorService } from '../generator/generator.service';
@@ -31,10 +31,6 @@ const SYSTEM_PROMPT =
  * it's always current — only usage metadata (doc 43 §11: provider/model/tokens/latency, no cost
  * — DeepSeek's pricing isn't tracked here to avoid quietly going stale) is recorded, as a
  * DecisionEvent, the same audit trail every other real action in this system already uses.
- *
- * RepairAdvisory is deliberately not explainable here: its `rationale` today is a fixed generic
- * string ("Advisory baseado no padrão determinístico da falha"), so an LLM "explanation" of it
- * would just paraphrase a vague sentence, not narrate a real decision.
  */
 @Injectable()
 export class AssistantService {
@@ -58,6 +54,11 @@ export class AssistantService {
   async explainRoutingDecision(missionId: string, taskId: string): Promise<ExplainDecisionResult> {
     const decision = await this.findRoutingDecision(missionId, taskId);
     return this.explainAndRecord(missionId, 'WorkRoutingDecision', decision.id, this.describeRoutingDecision(decision));
+  }
+
+  async explainRepairAdvisory(missionId: string, taskId: string): Promise<ExplainDecisionResult> {
+    const advisory = await this.findRepairAdvisory(missionId, taskId);
+    return this.explainAndRecord(missionId, 'RepairAdvisory', advisory.id, this.describeRepairAdvisory(advisory));
   }
 
   private async explainAndRecord(missionId: string, aggregateType: string, aggregateId: string, user: string): Promise<ExplainDecisionResult> {
@@ -106,6 +107,12 @@ export class AssistantService {
     return row.detailJson as unknown as WorkRoutingDecision;
   }
 
+  private async findRepairAdvisory(missionId: string, taskId: string): Promise<RepairAdvisory> {
+    const row = await this.prisma.repairAdvisory.findFirst({ where: { missionId, taskId }, orderBy: { createdAt: 'desc' } });
+    if (!row) throw new NotFoundException('REPAIR_ADVISORY_NOT_FOUND');
+    return row.detailJson as unknown as RepairAdvisory;
+  }
+
   private describeArchitectureDecision(decision: ArchitectureDecision): string {
     return [
       `Tipo de decisão: arquitetura de software`,
@@ -142,6 +149,19 @@ export class AssistantService {
       `Confiança da decisão: ${decision.confidence}`,
       `Justificativa registrada: ${decision.rationale}`,
       `Status: ${decision.status}`,
+    ].join('\n');
+  }
+
+  private describeRepairAdvisory(advisory: RepairAdvisory): string {
+    return [
+      `Tipo de decisão: recomendação de reparo (advisory) após uma falha`,
+      `Task: ${advisory.taskId}`,
+      `Código da falha: ${advisory.failureCode}`,
+      `Especialista recomendado: ${advisory.likelySpecialistRole}`,
+      `Capacidades necessárias: ${advisory.likelyCapabilities.join(', ') || 'nenhuma listada'}`,
+      `Risco: ${advisory.risk}`,
+      `Taxa de sucesso estimada: ${Math.round(advisory.estimatedSuccess * 100)}%`,
+      `Justificativa registrada: ${advisory.rationale}`,
     ].join('\n');
   }
 

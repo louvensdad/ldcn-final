@@ -9,5 +9,6 @@ import { DeepSeekClient, LLM_CLIENT } from './deepseek-client';
   imports: [PersistenceModule, GeneratorModule],
   controllers: [AssistantController],
   providers: [AssistantService, { provide: LLM_CLIENT, useClass: DeepSeekClient }],
+  exports: [LLM_CLIENT],
 })
 export class AssistantModule {}

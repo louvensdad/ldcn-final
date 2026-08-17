@@ -37,7 +37,7 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     missionId = `e2e-sse-${randomUUID()}`;
 
     const received: string[] = [];
-    const streamReq = http.get(`${baseUrl}/stream`, (res) => {
+    const streamReq = http.get(`${baseUrl}/stream?apiKey=${encodeURIComponent(process.env.LDCN_API_KEY ?? '')}`, (res) => {
       res.setEncoding('utf8');
       res.on('data', (chunk: string) => received.push(chunk));
     });
@@ -46,6 +46,7 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
 
     await request(app.getHttpServer())
       .post(`/missions/${missionId}/intelligent-generator/start`)
+      .set('x-api-key', process.env.LDCN_API_KEY ?? '')
       .send({ rawUserIdea: 'quero uma landing page' })
       .expect(202);
 

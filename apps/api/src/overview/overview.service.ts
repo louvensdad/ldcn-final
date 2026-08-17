@@ -10,6 +10,7 @@ export interface MissionSummaryDto {
   nextAction: string;
   blockers: string[];
   updatedAt: Date;
+  discoveryStatus?: string;
 }
 
 /**
@@ -34,8 +35,16 @@ export class OverviewService {
    * cursor yet, just a `take` limit.
    */
   async listMissions(limit = 50): Promise<MissionSummaryDto[]> {
-    const states = await this.prisma.generatorMissionState.findMany({ orderBy: { updatedAt: 'desc' }, take: limit });
-    const summaries = await Promise.all(
+    const [states, discoveries] = await Promise.all([
+      this.prisma.generatorMissionState.findMany({ orderBy: { updatedAt: 'desc' }, take: limit }),
+      // Missions still in Discovery have no GenerationResult/GeneratorMissionState row yet — the
+      // engine (Generator.generate()) hasn't run. Without this, a mission that only exists as a
+      // conversation would be invisible on Home/Missions, exactly the "dashboard parada" the
+      // Discovery mission brief calls out.
+      this.prisma.discoveryConversation.findMany({ orderBy: { updatedAt: 'desc' }, take: limit }),
+    ]);
+
+    const generated = await Promise.all(
       states.map(async (state): Promise<MissionSummaryDto | undefined> => {
         try {
           const overview = await this.getOverview(state.missionId);
@@ -55,7 +64,22 @@ export class OverviewService {
         }
       })
     );
-    return summaries.filter((summary): summary is MissionSummaryDto => summary !== undefined);
+
+    const handedOffIds = new Set(states.map((s) => s.missionId));
+    const inDiscovery: MissionSummaryDto[] = discoveries
+      .filter((d) => d.status !== 'HANDED_OFF' && !handedOffIds.has(d.missionId))
+      .map((d) => ({
+        missionId: d.missionId,
+        rawUserIdea: d.rawUserIdea,
+        nextAction: 'NONE',
+        blockers: [],
+        updatedAt: d.updatedAt,
+        discoveryStatus: d.status,
+      }));
+
+    return [...generated.filter((s): s is MissionSummaryDto => s !== undefined), ...inDiscovery]
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, limit);
   }
 
   async getOverview(missionId: string) {
@@ -67,6 +91,10 @@ export class OverviewService {
     session.commands.restore(missionId);
     const generatorOverview = session.commands.createQueryService().getGeneratorOverview(missionId);
     const currentOperation = await this.operations.latest(missionId);
+    const architectureReview = await this.prisma.architectureReview.findFirst({
+      where: { missionId },
+      orderBy: [{ reviewMode: 'desc' }, { updatedAt: 'desc' }],
+    });
 
     return {
       missionId,
@@ -93,6 +121,9 @@ export class OverviewService {
         conflictCount: result.architectureComposition.conflicts.length,
         status: result.architectureComposition.status,
       },
+      // MISSÃO "Arquitetura não pode seguir automaticamente para Entrega" — o veredito real do
+      // gate (null = review ainda nem foi iniciado), nunca inferido do generatorState.
+      architectureReviewStatus: architectureReview?.status ?? null,
       teamSummary: { instanceCount: result.agentTeam.instances.length, status: result.agentTeam.status },
       pipelineSummary: {
         nodeCount: result.pipeline.nodes.length,

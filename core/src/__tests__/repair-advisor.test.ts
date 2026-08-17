@@ -34,4 +34,23 @@ describe('RepairAdvisor', () => {
     expect(advisory.failureSnapshotId).toBe(snapshot.id);
     expect(advisory.likelyCapabilities).toEqual(expect.arrayContaining(['integration']));
   });
+
+  it('composes a real rationale from the already-computed facts instead of a fixed generic sentence', () => {
+    const advisory = new RepairAdvisor().advise({ missionId: 'repair-5', taskId: 'task-5', approvedSolutionId: 'solution-5', failureCode: 'AUTH_TEST_FAILED', failureSummary: 'JWT permission denied', affectedStack: 'stack.java.spring-boot' });
+    expect(advisory.rationale).not.toBe('Advisory baseado no padrão determinístico da falha na stack stack.java.spring-boot.');
+    expect(advisory.rationale).toContain(advisory.failureCode);
+    expect(advisory.rationale).toContain(advisory.likelySpecialistRole);
+    expect(advisory.rationale).toContain(advisory.risk);
+    expect(advisory.rationale).toContain('stack.java.spring-boot');
+    expect(advisory.rationale).toContain('sem histórico de reparos anteriores');
+  });
+
+  it('rationale reflects historical outcomes when available', () => {
+    const advisory = new RepairAdvisor().advise({ missionId: 'repair-6', taskId: 'task-6', approvedSolutionId: 'solution-6', failureCode: 'TEST_FAILED', failureSummary: 'assertion failed', historicalOutcomes: [
+      { id: 'outcome-1', missionId: 'repair-6', version: 1, outcomeType: 'REPAIR', featureSchemaVersion: 'v1', features: { failureCode: 'TEST_FAILED' }, decision: 'repair', result: 'fixed', success: true },
+      { id: 'outcome-2', missionId: 'repair-6', version: 2, outcomeType: 'REPAIR', featureSchemaVersion: 'v1', features: { failureCode: 'TEST_FAILED' }, decision: 'repair', result: 'failed', success: false },
+    ] });
+    expect(advisory.rationale).toContain('2 reparo(s) anterior(es)');
+    expect(advisory.rationale).toContain('50%');
+  });
 });

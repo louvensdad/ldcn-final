@@ -12,6 +12,10 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
   let prisma: PrismaService;
   let missionId: string;
 
+  function api(method: 'get' | 'post', path: string) {
+    return request(app.getHttpServer())[method](path).set('x-api-key', process.env.LDCN_API_KEY ?? '');
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -31,35 +35,30 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
 
   it('classifies, routes and switches a team for a task within a generated mission', async () => {
     missionId = `e2e-routing-${randomUUID()}`;
-    const server = app.getHttpServer();
 
-    await request(server)
-      .post(`/missions/${missionId}/intelligent-generator/start`)
+    await api('post', `/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero uma landing page' })
       .expect(202);
 
-    const classify = await request(server)
-      .post(`/missions/${missionId}/tasks/task-1/intelligent-routing/classify`)
+    const classify = await api('post', `/missions/${missionId}/tasks/task-1/intelligent-routing/classify`)
       .send({ description: 'Implementar hero section com SEO' })
       .expect(201);
     expect(classify.body.taskId).toBe('task-1');
 
-    const route = await request(server).post(`/missions/${missionId}/tasks/task-1/intelligent-routing/route`).expect(201);
+    const route = await api('post', `/missions/${missionId}/tasks/task-1/intelligent-routing/route`).expect(201);
     expect(route.body.taskId).toBe('task-1');
     expect(['ROUTED', 'BLOCKED_NO_REVIEWER', 'BLOCKED_CAPABILITY_GAP', 'BLOCKED_NO_EXECUTOR']).toContain(route.body.status);
 
-    const routeAgain = await request(server).post(`/missions/${missionId}/tasks/task-1/intelligent-routing/route`).expect(201);
+    const routeAgain = await api('post', `/missions/${missionId}/tasks/task-1/intelligent-routing/route`).expect(201);
     expect(routeAgain.body.id).toBe(route.body.id);
 
-    const overview = await request(server).get(`/missions/${missionId}/tasks/task-1/intelligent-routing`).expect(200);
+    const overview = await api('get', `/missions/${missionId}/tasks/task-1/intelligent-routing`).expect(200);
     expect(overview.body.classification.id).toBe(classify.body.id);
     expect(overview.body.routing.id).toBe(route.body.id);
   });
 
   it('classify/route for a task in an unknown mission return 404', async () => {
-    const server = app.getHttpServer();
-    await request(server)
-      .post(`/missions/does-not-exist-${randomUUID()}/tasks/task-1/intelligent-routing/classify`)
+    await api('post', `/missions/does-not-exist-${randomUUID()}/tasks/task-1/intelligent-routing/classify`)
       .send({ description: 'x' })
       .expect(404);
   });

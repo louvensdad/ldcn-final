@@ -5,6 +5,7 @@ import { OperationPersistenceService } from '../operations/operation-persistence
 import { EventBusService } from '../events/event-bus.service';
 import { GeneratorService } from '../generator/generator.service';
 import { RoutingPersistenceService } from '../routing/routing-persistence.service';
+import { RepairPersistenceService } from '../repair/repair-persistence.service';
 import { AssistantService } from '../assistant/assistant.service';
 import { LlmClient, LlmCompletionRequest, LlmCompletionResult } from '../assistant/deepseek-client';
 
@@ -26,6 +27,7 @@ class FakeLlmClient implements LlmClient {
   let prisma: PrismaService;
   let missionPersistence: MissionPersistenceService;
   let routing: RoutingPersistenceService;
+  let repair: RepairPersistenceService;
   let fakeLlm: FakeLlmClient;
   let assistant: AssistantService;
 
@@ -40,6 +42,7 @@ class FakeLlmClient implements LlmClient {
     fakeLlm = new FakeLlmClient();
     const generator = new GeneratorService(missionPersistence, new OperationPersistenceService(prisma), new EventBusService());
     assistant = new AssistantService(fakeLlm, prisma, missionPersistence, generator);
+    repair = new RepairPersistenceService(prisma, missionPersistence, generator);
   });
 
   afterAll(async () => {
@@ -52,6 +55,8 @@ class FakeLlmClient implements LlmClient {
     await prisma.generatorMissionState.deleteMany({ where: { missionId } });
     await prisma.jobClassificationRecord.deleteMany({ where: { missionId } });
     await prisma.workRoutingDecisionRecord.deleteMany({ where: { missionId } });
+    await prisma.failureSnapshot.deleteMany({ where: { missionId } });
+    await prisma.repairAdvisory.deleteMany({ where: { missionId } });
   }
 
   async function seedMissionWithArchitecture(missionId: string) {
@@ -171,6 +176,39 @@ class FakeLlmClient implements LlmClient {
       const payload = events[0].payload as Record<string, unknown>;
       expect(payload.aggregateType).toBe('WorkRoutingDecision');
       expect(payload.aggregateId).toBe(routed.id);
+    } finally {
+      await cleanup(missionId);
+    }
+  });
+
+  it('404s for a repair advisory that does not exist on the mission', async () => {
+    const missionId = `test-${randomUUID()}`;
+    try {
+      await seedMissionWithArchitecture(missionId);
+      await expect(assistant.explainRepairAdvisory(missionId, 'task-never-classified')).rejects.toThrow('REPAIR_ADVISORY_NOT_FOUND');
+    } finally {
+      await cleanup(missionId);
+    }
+  });
+
+  it('explains a real repair advisory (with its real, non-generic rationale) and records the event', async () => {
+    const missionId = `test-${randomUUID()}`;
+    try {
+      await seedMissionWithArchitecture(missionId);
+      const { advisory } = await repair.classifyAndAdvise(missionId, 'task-1', { executionId: 'exec-1', summary: 'critical security vulnerability in auth flow' });
+      expect(advisory.rationale).toContain(advisory.likelySpecialistRole);
+
+      const explanation = await assistant.explainRepairAdvisory(missionId, 'task-1');
+
+      expect(explanation.explanation).toBe('Explicação em linguagem simples.');
+      expect(fakeLlm.calls[0].user).toContain(advisory.likelySpecialistRole);
+      expect(fakeLlm.calls[0].user).toContain(advisory.rationale);
+
+      const events = await prisma.decisionEvent.findMany({ where: { missionId, eventType: 'AI_EXPLANATION_GENERATED' } });
+      expect(events).toHaveLength(1);
+      const payload = events[0].payload as Record<string, unknown>;
+      expect(payload.aggregateType).toBe('RepairAdvisory');
+      expect(payload.aggregateId).toBe(advisory.id);
     } finally {
       await cleanup(missionId);
     }

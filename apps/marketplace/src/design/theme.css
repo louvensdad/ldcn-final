@@ -1,0 +1,97 @@
+/**
+ * Semantic design tokens (Fase 15 — light/dark/system). Every color in the app should resolve
+ * through one of these custom properties — see design/tokens.ts, which exposes them to inline
+ * styles via `T.x` and `alpha(T.x, n)`.
+ *
+ * Three states, not two: an explicit user choice stamps data-theme="light"/"dark" on <html>;
+ * the default "system" choice stamps nothing, so only prefers-color-scheme decides. The bare
+ * :root block below is the light palette (also the fallback for browsers without color-scheme
+ * support); the media-query block redefines the same properties for a dark OS preference, guarded
+ * so an explicit light choice still wins; the [data-theme="dark"] block redefines them again so
+ * an explicit dark choice wins regardless of OS. Never add a color to only one of these blocks.
+ */
+
+:root {
+  color-scheme: light;
+
+  --background: #f6f6f9;
+  --surface: #ffffff;
+  --surface-elevated: #fcfcff;
+  --surface-hover: #eef0f6;
+  --border: #e3e4ec;
+  --border-mid: #d3d5e2;
+  --border-strong: #b9bccf;
+
+  --text-primary: #14151c;
+  --text-secondary: #4b4e5c;
+  --text-muted: #868aa0;
+
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #4338ca;
+  --accent-2: #7c3aed;
+  --accent-2-soft: #6d28d9;
+
+  --info: #0891b2;
+  --success: #059669;
+  --warning: #b45309;
+  --danger: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --background: #07080c;
+    --surface: #0d1018;
+    --surface-elevated: #13161f;
+    --surface-hover: #181b27;
+    --border: #161a26;
+    --border-mid: #1c2032;
+    --border-strong: #23293b;
+
+    --text-primary: #e1e6f2;
+    --text-secondary: #8892a8;
+    --text-muted: #44506a;
+
+    --accent: #6366f1;
+    --accent-hover: #7578f3;
+    --accent-soft: #818cf8;
+    --accent-2: #8b5cf6;
+    --accent-2-soft: #a78bfa;
+
+    --info: #06b6d4;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #07080c;
+  --surface: #0d1018;
+  --surface-elevated: #13161f;
+  --surface-hover: #181b27;
+  --border: #161a26;
+  --border-mid: #1c2032;
+  --border-strong: #23293b;
+
+  --text-primary: #e1e6f2;
+  --text-secondary: #8892a8;
+  --text-muted: #44506a;
+
+  --accent: #6366f1;
+  --accent-hover: #7578f3;
+  --accent-soft: #818cf8;
+  --accent-2: #8b5cf6;
+  --accent-2-soft: #a78bfa;
+
+  --info: #06b6d4;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+html, body, #root { background: var(--background); }

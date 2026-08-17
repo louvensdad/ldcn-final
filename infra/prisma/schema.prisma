@@ -156,6 +156,599 @@ model GenerationResult {
   updatedAt   DateTime @updatedAt
 }
 
+/// Redesign Fase D (Project Command Center): agrupamento persistente de missões, puramente do
+/// lado da Platform API — não participa do event-sourcing do core (core/ não sabe que Project
+/// existe). Missão continua sendo a unidade de trabalho; Project é só o contêiner visível ao
+/// usuário. Sem workspaceId/tenantId, mesma simplificação do resto do schema atual.
+model Project {
+  id                      String   @id
+  name                    String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  /// MISSÃO "Marketplace de Sistemas Completos" seção 22: um Project clonado do Marketplace
+  /// carrega de onde veio — nunca modifica a solução original (ela permanece intocada,
+  /// independente de quantos projetos derivarem dela).
+  sourceSolutionId        String?
+  sourceSolutionVersionId String?
+  purchaseId              String?
+}
+
+/// Uma missão pertence a no máximo um Project por vez — reatribuir substitui a linha anterior
+/// (ver ProjectPersistenceService#assignMission). missionId é a PK porque é 1:1 do lado da
+/// missão; várias missões podem apontar para o mesmo projectId.
+model ProjectMission {
+  missionId String   @id
+  projectId String
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+/// Fase 13 (IA e Providers): uma credencial de provedor de IA por workspace. encryptedKey nunca
+/// guarda texto puro (ver security/credential-crypto.ts, AES-256-GCM) — keyPreview é o único
+/// fragmento (4 + 3 caracteres) que já nasce seguro para trafegar até o navegador. provider é a PK
+/// porque hoje só existe 1 credencial ativa por provedor por workspace (sem multiusuário ainda).
+model ProviderCredential {
+  provider     String    @id
+  encryptedKey String
+  keyPreview   String
+  model        String?
+  status       String    @default("untested")
+  lastTestedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+/// Trilha de auditoria mínima e real das mudanças de credencial — nunca contém a chave em si,
+/// só o fato de que algo aconteceu. Existe separada de DecisionEvent porque não é sobre uma
+/// missão: é sobre configuração do workspace.
+model ProviderCredentialAudit {
+  id        String   @id
+  provider  String
+  action    String
+  success   Boolean?
+  createdAt DateTime @default(now())
+
+  @@index([provider, createdAt])
+}
+
+/// Mission report fix: estado real de uma conversa de Discovery, existe ANTES do engine
+/// determinístico (core Generator.generate()) rodar. missionId é o mesmo UUID gerado no client
+/// que depois vira a chave de GenerationResult/GeneratorMissionState quando o handoff acontece —
+/// não há tabela "Mission" única no sistema (ver DecisionEvent/Operation, mesmo padrão).
+/// status: DISCOVERY_RUNNING | WAITING_FOR_USER | FEATURE_REVIEW | PROMPTMASTER_GENERATING |
+/// PROMPTMASTER_READY | PROMPTMASTER_APPROVED | HANDED_OFF (generate() já rodou).
+model DiscoveryConversation {
+  missionId         String    @id
+  status            String
+  rawUserIdea       String
+  /// { technologyPreferences?, forbiddenDeliveryTargets?, constraints? } — o formulário avançado
+  /// do Wizard (usuário técnico) continua funcionando: capturado aqui no start() e repassado
+  /// intacto pro engine determinístico no handoff, em vez de ser silenciosamente descartado.
+  advancedInput     Json?
+  interpretedIntent String?
+  domain            String?
+  goal              String?
+  targetUsers       Json?
+  knownRequirements Json?
+  unknowns          Json?
+  confidence        Float     @default(0)
+  currentQuestion   Json?
+  turnCount         Int       @default(0)
+  handedOffAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+/// Uma linha por turno de conversa (usuário ou assistente). provider/model/tokens/latency só
+/// são preenchidos em mensagens do assistente geradas por IA real — nunca fabricados.
+model DiscoveryMessage {
+  id               String   @id
+  missionId        String
+  role             String
+  content          String
+  provider         String?
+  model            String?
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int?
+  createdAt        DateTime @default(now())
+
+  @@index([missionId, createdAt])
+}
+
+/// Mission report evolução (governança do PromptMaster): unidade atômica de proveniência —
+/// substitui FeatureSuggestion (evolução, não entidade paralela). Cada seção itemizável do
+/// PromptMaster (usuários/funcionalidades/regras/fluxos/dados/integrações/segurança/privacidade/
+/// RNF/critérios de aceite/fora do escopo) é uma lista de Requirement com `section`; vision/
+/// objective/targetAudience continuam narrativos direto em PromptMasterVersion. Nunca marcar
+/// status=CONFIRMED sem uma decisão real do usuário correspondente (approvedBy/approvedAt).
+model Requirement {
+  id                  String    @id
+  missionId           String
+  /// Nullable: um requirement nasce durante o Discovery, antes de qualquer PromptMasterVersion
+  /// existir. Só passa a apontar para uma versão quando essa versão é gerada a partir dele
+  /// (snapshot de proveniência), nunca o contrário.
+  promptMasterId      String?
+  section             String
+  content             String
+  origin              String
+  /// Confiança da IA quando origin é AI_SUGGESTED/AI_REFINED (0-1) — carrega o mesmo sinal que
+  /// antes distinguia "essencial" (INFERRED) de "sugestão de valor agregado" (AI_SUGGESTED) no
+  /// FeatureSuggestion antigo, sem precisar de um enum de importância separado do provenance.
+  confidence          Float?
+  status              String    @default("DRAFT")
+  createdBy           String
+  createdAt           DateTime  @default(now())
+  approvedBy          String?
+  approvedAt          DateTime?
+  version             Int       @default(1)
+  parentRequirementId String?
+  evidence            String?
+  reasoningSummary    String?
+  updatedAt           DateTime  @updatedAt
+  /// MISSÃO "Marketplace de Sistemas Completos" seção 19: proveniência obrigatória quando um
+  /// requirement nasce de uma personalização de solução do Marketplace — nunca fabricada, sempre
+  /// nula para requirements que nasceram de um Discovery comum.
+  sourceSolutionId    String?
+  sourceRequirementId String?
+  /// CORE-011 — identificador humano estável (REQ-001, REQ-002...), único dentro da Mission, nunca
+  /// reciclado mesmo quando o Requirement é superseded/rejeitado. Nullable só por compat com linhas
+  /// pré-CORE-011 (nunca backfilled retroativamente para não fabricar proveniência).
+  requirementKey      String?
+  /// CORE-011 — categoria canônica do requirement (FUNCTIONAL/NON_FUNCTIONAL/CONSTRAINT/DATA/
+  /// INTEGRATION/SECURITY/UX/OPERATIONS/COMPLIANCE/OTHER), distinta de `section` (taxonomia do
+  /// documento PromptMaster) — não substitui `section`, coexiste com ela.
+  category            String?
+  /// CORE-011 — proveniência exata para Scope Coverage: USER_EXPLICIT | DISCOVERY_EXTRACTED |
+  /// USER_EDIT | SYSTEM_DERIVED. Distinto de `origin` (vocabulário legado do Discovery/Marketplace,
+  /// preservado sem alteração) — nunca reinterpreta `origin` como aprovação explícita do usuário.
+  source              String?
+  sourceRef           String?
+  priority            String?
+
+  @@index([missionId, promptMasterId, section])
+  @@index([missionId, status])
+  @@index([parentRequirementId])
+  @@index([missionId, requirementKey])
+}
+
+/// CORE-011 §3/§4 — contador monotônico por Mission para requirementKey (REQ-001, REQ-002...).
+/// Nunca decresce, nunca reutiliza um valor já emitido, mesmo que o Requirement correspondente
+/// tenha sido superseded/rejeitado — garante traceability estável (§4 "NÃO reciclar Requirement
+/// Key").
+model RequirementKeySequence {
+  missionId String @id
+  nextValue Int    @default(1)
+}
+
+/// CORE-011 §11 — conjunto de Requirements congelado que segue para Solution Planning (CORE-012).
+/// FINALIZED é imutável: qualquer mudança de escopo depois disso cria uma nova version (v1 permanece
+/// auditável). baselineHash é determinístico sobre (requirementKey, category, statement/content,
+/// source, status relevante) — nunca inclui timestamp.
+model RequirementBaseline {
+  id                       String    @id
+  missionId                String
+  version                  Int
+  requirementRefsJson      Json
+  /// CORE-011 REWORK 01 — immutable canonical evidence; historical reads never reconstruct
+  /// statement/category/source/status from mutable Requirement rows.
+  requirementsSnapshotJson Json      @default("[]")
+  baselineHash             String
+  status                   String    @default("DRAFT")
+  createdAt                DateTime  @default(now())
+  finalizedAt              DateTime?
+
+  @@unique([missionId, version])
+  @@index([missionId, status])
+}
+
+/// CORE-011 §15-23 — uma decisão de escopo por Requirement por RequirementBaseline. Histórico
+/// preservado (nunca UPDATE destrutivo): uma nova decisão para o mesmo (requirementId,
+/// requirementBaselineId) marca a anterior com supersededAt e vira a nova "atual". decision:
+/// IN_SCOPE | DEFERRED_USER_APPROVED | NOT_APPLICABLE | BLOCKED — nunca OUT_OF_SCOPE_THIS_VERSION
+/// (proibido como saída silenciosa, §15/§Z). DEFERRED_USER_APPROVED exige decisionSource=USER e
+/// approvalRef não-vazio (evidência mínima real, §17) — o AI/sistema nunca decide isso sozinho.
+model ScopeCoverageDecision {
+  id                    String    @id
+  missionId             String
+  requirementId         String
+  requirementKey        String
+  requirementBaselineId String
+  decision              String
+  reason                String?
+  decisionSource        String
+  approvalRef           String?
+  createdAt             DateTime  @default(now())
+  supersededAt          DateTime?
+
+  @@index([missionId, requirementBaselineId])
+  @@index([requirementId, requirementBaselineId])
+}
+
+/// CORE-012 — evolução persistente do ApprovedSolution legado de core/. É a única solução
+/// técnica canônica da Mission antes de Architecture Planning. Os JSONs APPROVED nunca são
+/// reescritos; mudança de baseline/resultado cria version+1 e a anterior pode apenas transicionar
+/// para SUPERSEDED. `approvedAt` significa aprovação por policies determinísticas da plataforma,
+/// não aprovação humana nem autorização de delivery.
+model ApprovedSolution {
+  id                               String    @id
+  missionId                        String
+  version                          Int
+  requirementBaselineId            String
+  requirementBaselineVersion       Int
+  requirementBaselineHash          String
+  scopeCoverageHash                String
+  planningAgentExecutionId         String
+  plannerAgentDefinitionKey        String
+  plannerAgentDefinitionVersion    Int
+  promptSnapshotId                 String
+  solutionPlanResultHash           String
+  solutionHash                     String
+  solutionType                     String
+  componentsJson                   Json      @default("[]")
+  stackSelectionsJson              Json      @default("[]")
+  requirementDecisionsJson         Json      @default("[]")
+  deferredRequirementRefsJson      Json      @default("[]")
+  notApplicableRequirementRefsJson Json      @default("[]")
+  constraintsJson                  Json      @default("[]")
+  nonFunctionalStrategiesJson      Json      @default("[]")
+  assumptionsJson                  Json      @default("[]")
+  risksJson                        Json      @default("[]")
+  validationJson                   Json      @default("{}")
+  confidence                       Float
+  status                           String    @default("DRAFT")
+  createdAt                        DateTime  @default(now())
+  approvedAt                       DateTime?
+
+  @@unique([missionId, version])
+  @@index([missionId, status])
+  @@index([requirementBaselineId, scopeCoverageHash])
+  @@index([missionId, requirementBaselineHash, scopeCoverageHash, solutionHash])
+}
+
+/// CORE-013 — arquitetura canônica derivada de uma ApprovedSolution Prisma exata. Conteúdo
+/// APPROVED é imutável; somente status pode avançar para SUPERSEDED quando uma nova solution
+/// recebe sua própria composição.
+model ArchitectureComposition {
+  id                             String    @id
+  missionId                      String
+  version                        Int
+  approvedSolutionId             String    @unique
+  approvedSolutionVersion        Int
+  solutionHash                   String
+  requirementBaselineId          String
+  requirementBaselineHash        String
+  scopeCoverageHash              String
+  proposalAgentExecutionId       String
+  proposalAgentDefinitionKey     String
+  proposalAgentDefinitionVersion Int
+  proposalPromptSnapshotId       String
+  architectureStyle              String
+  modulesJson                    Json      @default("[]")
+  decisionsJson                  Json      @default("[]")
+  integrationsJson               Json      @default("[]")
+  dataFlowsJson                  Json      @default("[]")
+  securityBoundariesJson         Json      @default("[]")
+  requirementMappingsJson        Json      @default("[]")
+  exactStackSelectionsJson       Json      @default("[]")
+  proposalResultHash             String
+  architectureHash               String
+  status                         String    @default("DRAFT")
+  createdAt                      DateTime  @default(now())
+  approvedAt                     DateTime?
+  humanApprovalRequestId         String?   @unique
+
+  @@unique([missionId, version])
+  @@index([missionId, status])
+  @@index([approvedSolutionId, solutionHash])
+}
+
+/// CORE-015 — estado operacional canônico do Cognitive Core. O restante do sistema mantém seus
+/// aggregates legados; esta linha coordena somente o checkpoint humano e o assembly do Slice C5.
+model MissionControl {
+  missionId                    String   @id
+  status                       String   @default("PLANNING")
+  activeArchitectureId         String?
+  activeImplementationPlanId   String?
+  activeVirtualCompanyId       String?
+  activeAssemblyId             String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+/// Decisão humana imutável depois de concluída. `subjectHash` prova exatamente qual versão foi
+/// decidida; APPROVED/REJECTED nunca voltam para PENDING.
+model HumanApprovalRequest {
+  id          String    @id
+  missionId   String
+  trigger     String
+  subjectType String
+  subjectId   String
+  subjectHash String
+  status      String    @default("PENDING")
+  requestedBy String
+  requestNote String?
+  decidedBy   String?
+  decidedAt   DateTime?
+  rationale   String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([trigger, subjectType, subjectId, subjectHash])
+  @@index([missionId, status])
+}
+
+/// Proposta cognitiva de decomposição, congelada contra arquitetura/baseline/cobertura exatas.
+model ImplementationPlan {
+  id                       String    @id
+  missionId                String
+  version                  Int
+  architectureCompositionId String   @unique
+  architectureHash         String
+  requirementBaselineId    String
+  requirementBaselineHash  String
+  scopeCoverageHash         String
+  plannerAgentExecutionId   String
+  plannerAgentDefinitionKey String
+  plannerAgentDefinitionVersion Int
+  promptSnapshotId          String
+  resultHash                String
+  planHash                  String
+  summary                   String
+  workPackagesJson          Json      @default("[]")
+  risksJson                 Json      @default("[]")
+  assumptionsJson           Json      @default("[]")
+  confidence                Float
+  status                    String    @default("VALIDATED")
+  createdAt                 DateTime  @default(now())
+  approvedAt                DateTime?
+
+  @@unique([missionId, version])
+  @@index([missionId, status])
+}
+
+/// Retry-safe orchestration record. Each architecture has at most one assembly and resumes from
+/// persisted stages instead of repeating completed LLM work.
+model MissionAssembly {
+  id                        String    @id
+  missionId                 String
+  architectureCompositionId String    @unique
+  implementationPlanId      String?
+  virtualCompanyId          String?
+  status                    String    @default("PLANNING")
+  errorCode                 String?
+  startedAt                 DateTime  @default(now())
+  completedAt               DateTime?
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([missionId, status])
+}
+
+/// Job canônico pré-execução do Slice C5. Não substitui GenerationJob, que permanece como
+/// registro legado de execução/scaffolding.
+model MissionJob {
+  id                       String   @id
+  missionId                String
+  implementationPlanId     String
+  jobKey                   String
+  title                    String
+  moduleKey                String
+  objective                String
+  requirementKeysJson      Json     @default("[]")
+  requiredCapabilitiesJson Json     @default("[]")
+  dependencyKeysJson       Json     @default("[]")
+  complexity               String
+  risk                     String
+  status                   String   @default("PLANNED")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([implementationPlanId, jobKey])
+  @@index([missionId, status])
+}
+
+/// CORE-016 — decisão determinística e imutável de equipe mínima para um MissionJob. O router
+/// escolhe somente AgentInstances da VirtualCompany congelada pelo mesmo ImplementationPlan.
+model MissionJobRouting {
+  id                       String   @id
+  missionId                String
+  missionJobId             String   @unique
+  implementationPlanId     String
+  virtualCompanyId         String
+  contextHash              String
+  status                   String
+  executorAgentInstanceId  String?
+  reviewerAgentInstanceId  String?
+  selectedAgentIdsJson     Json     @default("[]")
+  requiredCapabilitiesJson Json     @default("[]")
+  capabilityCoverageJson   Json     @default("[]")
+  missingCapabilitiesJson  Json     @default("[]")
+  rationale                String
+  routingSource            String   @default("DETERMINISTIC")
+  createdAt                DateTime @default(now())
+
+  @@index([missionId, status])
+  @@index([implementationPlanId])
+}
+
+/// CORE-014 — empresa virtual temporária derivada exclusivamente de uma arquitetura aprovada.
+/// Uma nova versão da arquitetura cria outra empresa; composições APPROVED anteriores são apenas
+/// SUPERSEDED, preservando integralmente a evidência e a rationale usadas na decisão.
+model VirtualCompany {
+  id                        String    @id
+  missionId                 String
+  version                   Int
+  architectureCompositionId String    @unique
+  architectureHash          String
+  approvedSolutionId        String
+  implementationPlanId      String?
+  compositionHash           String
+  rationale                 String
+  status                    String    @default("DRAFT")
+  composedBy                String    @default("team-composer.v1")
+  createdAt                 DateTime  @default(now())
+  approvedAt                DateTime?
+
+  @@unique([missionId, version])
+  @@index([missionId, status])
+}
+
+/// Unidade mission-scoped da VirtualCompany. `unitDefinitionId` sempre aponta para uma unidade
+/// existente no catálogo e `stackKeysJson` é um snapshot das stacks exatas que justificaram o time.
+model TeamInstance {
+  id                 String   @id
+  missionId          String
+  virtualCompanyId   String
+  unitDefinitionId   String
+  name               String
+  stackKeysJson      Json     @default("[]")
+  rationale          String
+  createdAt          DateTime @default(now())
+
+  @@unique([virtualCompanyId, unitDefinitionId])
+  @@index([missionId])
+}
+
+/// Evidência determinística append-only de por que cada cargo foi (ou não foi) convocado.
+model TeamCompositionDecision {
+  id                       String   @id
+  missionId                String
+  virtualCompanyId         String
+  teamInstanceId           String
+  agentDefinitionKey       String
+  agentDefinitionVersion   Int
+  role                     String
+  rationale                String
+  capabilityKeysJson       Json     @default("[]")
+  architectureEvidenceJson Json     @default("[]")
+  createdAt                DateTime @default(now())
+
+  @@unique([virtualCompanyId, agentDefinitionKey])
+  @@index([missionId])
+}
+
+/// O "contrato" real entre Discovery e o engine determinístico — agora versionado e travável
+/// (Fase 3/9 da governança). fullMarkdown é o documento técnico completo; vision/objective/
+/// targetAudience são narrativos (não itemizáveis); as demais seções vivem como Requirement
+/// (evita duplicar o mesmo conteúdo em dois lugares que podem divergir). status:
+/// DRAFT | PENDING_REVIEW | LOCKED | SUPERSEDED. Uma vez LOCKED, a versão é imutável — uma
+/// mudança depois disso é sempre um Change Request que gera a próxima versão.
+model PromptMasterVersion {
+  id                      String    @id
+  missionId               String
+  version                 Int
+  vision                  String
+  objective               String
+  targetAudience          String
+  fullMarkdown            String
+  hash                    String
+  status                  String    @default("DRAFT")
+  createdBy               String    @default("discovery-ai")
+  provider                String
+  model                   String
+  promptTokens            Int
+  completionTokens        Int
+  latencyMs               Int
+  createdAt               DateTime  @default(now())
+  lockedAt                DateTime?
+  /// MISSÃO "Marketplace de Sistemas Completos" seção 19: um PromptMasterVersion nascido de uma
+  /// compra do Marketplace aponta para a solução/versão/plano de origem — nunca edita o
+  /// PromptMaster original (a versão de referência da solução), sempre cria um novo.
+  sourceSolutionId        String?
+  sourceSolutionVersionId String?
+  customizationPlanId     String?
+
+  @@unique([missionId, version])
+  @@index([missionId, status])
+}
+
+/// Fase 6 da governança do PromptMaster: contrato único que todo reviewer (Fase 7) produz — nunca
+/// texto livre controlando o pipeline. severity: INFO | ADVISORY | WARNING | BLOCKER (só BLOCKER
+/// impede aprovação). status: OPEN | RESOLVED | DISMISSED — resolvido pelo Decision Center (Fase 8)
+/// ou por uma nova versão do PromptMaster que corrige o problema.
+model ReviewFinding {
+  id                         String    @id
+  missionId                  String
+  promptMasterId             String
+  reviewerKey                String
+  code                       String
+  severity                   String
+  section                    String?
+  requirementIdsJson         Json
+  finding                    String
+  recommendedResolutionsJson Json
+  requiresUserDecision       Boolean   @default(false)
+  status                     String    @default("OPEN")
+  resolvedBy                 String?
+  resolvedAt                 DateTime?
+  resolutionNote             String?
+  createdAt                  DateTime  @default(now())
+
+  @@index([missionId, promptMasterId])
+  @@index([missionId, severity, status])
+}
+
+/// Fase 28 do brief (AI telemetry): uma linha por execução de reviewer — nunca chain-of-thought,
+/// só o que é auditável (agente, provider/model, tokens, latência, status, quantos findings
+/// produziu). Fase 29 (resiliência): FAILED é um status normal, não interrompe os outros
+/// reviewers nem apaga o que já rodou.
+model ReviewerExecution {
+  id                    String   @id
+  missionId             String
+  promptMasterId        String
+  reviewerKey           String
+  /// PASSED | PASSED_WITH_FALLBACK | DEGRADED | FAILED_RETRYABLE | FAILED_BLOCKING | NOT_APPLICABLE
+  status                String
+  provider              String?
+  model                 String?
+  promptTemplateVersion String
+  findingCount          Int      @default(0)
+  promptTokens          Int?
+  completionTokens      Int?
+  latencyMs             Int?
+  errorCode             String?
+  /// Quantas tentativas reais (mesmo provider) até este resultado — 1 = sem retry. Nunca fabricado.
+  attemptCount          Int      @default(1)
+  /// true quando a regra determinística de fallback foi quem realmente concluiu a revisão (sem LLM).
+  fallbackUsed          Boolean  @default(false)
+  startedAt             DateTime
+  finishedAt            DateTime
+  createdAt             DateTime @default(now())
+
+  @@index([missionId, promptMasterId])
+}
+
+/// Fase 8 do brief (Decision Center): registro real de qual opção o usuário escolheu para
+/// resolver um ReviewFinding que exigia decisão — nunca um blocker vira erro técnico sem
+/// alternativa. A escolha é aplicada via o mesmo mecanismo do Copilot (Fase 5), não um caminho
+/// paralelo: "Decision → Requirement update" é uma única ação real.
+model PromptMasterDecision {
+  id             String   @id
+  missionId      String
+  promptMasterId String
+  findingId      String
+  chosenOption   String
+  decidedBy      String
+  createdAt      DateTime @default(now())
+
+  @@index([missionId, promptMasterId])
+}
+
+/// Fase 3 da governança do PromptMaster: todo pedido de mudança contra uma versão já LOCKED gera
+/// isto + uma nova PromptMasterVersion (nunca muta a versão travada — ela vira SUPERSEDED,
+/// permanece intacta como registro histórico do que realmente foi usado até então).
+model PromptMasterChangeRequest {
+  id                 String   @id
+  missionId          String
+  fromPromptMasterId String
+  toPromptMasterId   String
+  reason             String
+  requestedBy        String
+  createdAt          DateTime @default(now())
+
+  @@index([missionId, createdAt])
+}
+
 /// Envelope assíncrono do comando POST .../start (doc 36 §11, simplificado: sem
 /// workspaceId/tenantId, que ainda não existem no sistema). type é sempre
 /// "GENERATE_MISSION" por enquanto (único comando assíncrono implementado).
@@ -172,4 +765,983 @@ model Operation {
   createdAt     DateTime  @default(now())
 
   @@index([missionId, createdAt])
+}
+
+/// MISSÃO "Marketplace de Sistemas Completos" — o "produto". status: DRAFT | VALIDATING | BETA |
+/// VERIFIED | DEPRECATED | REJECTED (seção 3) — só VERIFIED aparece como sistema pronto. Nunca
+/// editada pelo comprador: toda customização vira um Project/PromptMaster novo (seção 22).
+model MarketplaceSolution {
+  id               String    @id
+  slug             String    @unique
+  name             String
+  description      String
+  publisherId      String
+  status           String    @default("DRAFT")
+  visibility       String    @default("PRIVATE")
+  category         String
+  industry         String?
+  tagsJson         Json      @default("[]")
+  pricingModel     String    @default("FREE")
+  currentVersionId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  publishedAt      DateTime?
+
+  @@index([status, visibility])
+}
+
+/// Cada publicação é imutável (checksum), igual PromptMasterVersion (seção 4). Nunca duplica
+/// conteúdo: referencia a missão real cujo PromptMaster LOCKED e revisado pelo Review Council
+/// serve de referência viva da solução — o "artifact" real que este sistema é capaz de produzir
+/// hoje (ver relatório: não existe runtime de build/execução real neste codebase).
+model MarketplaceSolutionVersion {
+  id                             String    @id
+  solutionId                     String
+  version                        Int
+  referenceMissionId             String
+  referencePromptMasterVersionId String
+  manifestJson                   Json
+  stackSnapshotJson              Json
+  validationSnapshotJson         Json      @default("{}")
+  pricingSnapshotJson            Json      @default("{}")
+  status                         String    @default("DRAFT")
+  releaseNotes                   String?
+  checksum                       String
+  createdAt                      DateTime  @default(now())
+  publishedAt                    DateTime?
+  /// MISSÃO "Completar o fluxo de compra/personalização" seção 16 — uma solução VERIFIED pode
+  /// degradar depois da publicação (regras de review mudaram, policy do PromptMaster evoluiu,
+  /// etc). OK | REVALIDATION_REQUIRED | TEMPORARILY_UNAVAILABLE. Nunca setado automaticamente por
+  /// um scanner contínuo hoje (não existe um) — só pelo próprio fluxo de compra "como está"
+  /// (seção 15) quando o Review Council encontra um BLOCKER real numa versão publicada, o que
+  /// significa que a inconsistência é da solução, não do comprador.
+  revalidationStatus             String    @default("OK")
+  revalidationNote               String?
+
+  @@unique([solutionId, version])
+  @@index([solutionId, status])
+}
+
+/// Seção 12 do brief — o plano gerado pela MarketplaceSolutionCustomizerAI comparando a solução
+/// existente com o pedido do comprador. missionId é a conversa de customização (reaproveita o
+/// mesmo padrão conversacional do Discovery, seção 10).
+model MarketplaceCustomizationPlan {
+  id                         String    @id
+  solutionId                 String
+  solutionVersionId          String
+  missionId                  String
+  requestedBy                String    @default("user")
+  businessContextJson        Json
+  keepJson                   Json      @default("[]")
+  removeJson                 Json      @default("[]")
+  modifyJson                 Json      @default("[]")
+  addJson                    Json      @default("[]")
+  architectureImpactsJson    Json      @default("[]")
+  contractImpactsJson        Json      @default("[]")
+  dataImpactsJson            Json      @default("[]")
+  securityImpactsJson        Json      @default("[]")
+  testImpactsJson            Json      @default("[]")
+  documentationImpactsJson   Json      @default("[]")
+  complexity                 String    @default("LOW")
+  architectureImpact         String    @default("PATCH")
+  requiresArchitectureReview Boolean   @default(false)
+  requiresUserDecision       Boolean   @default(false)
+  status                     String    @default("DRAFT")
+  /// Seção 15/28 — "comprar como está" nunca deveria introduzir mudança nenhuma. Persistido (não
+  /// derivado do businessContextJson) porque a distinção muda o significado de um BLOCKER
+  /// encontrado depois: com asIs=true, o defeito é da solução publicada (seção 15), não do
+  /// comprador.
+  asIs                       Boolean   @default(false)
+  /// Seção 12 do brief — teto real de rodadas de auto-repair/re-review por plano, para o
+  /// PromptMaster derivado nunca oscilar indefinidamente (REVIEW_LOOP_EXHAUSTED).
+  reviewAttemptCount         Int       @default(0)
+  createdAt                  DateTime  @default(now())
+  approvedAt                 DateTime?
+
+  @@index([solutionId, missionId])
+}
+
+/// Seção 27 — a IA classifica complexidade, o Billing Engine (determinístico) calcula o preço.
+/// Nunca o LLM decidindo valor financeiro (seção 26). Preços em centavos, nunca float.
+model MarketplacePricingQuote {
+  id                  String   @id
+  customizationPlanId String?
+  solutionId          String
+  solutionVersionId   String
+  basePrice           Int
+  customizationPrice  Int      @default(0)
+  integrationPrice    Int      @default(0)
+  estimatedAiCost     Int      @default(0)
+  discount            Int      @default(0)
+  total               Int
+  currency            String   @default("BRL")
+  calculationVersion  String   @default("v1")
+  validUntil          DateTime
+  createdAt           DateTime @default(now())
+}
+
+/// Seção 28 — registro real e auditável da transação. Não existe processador de pagamento real
+/// integrado neste codebase (nenhum Stripe/gateway) — status fica sempre "CONFIRMED" quando o
+/// usuário aprova a cotação, um estado real e persistido, nunca uma simulação de "pagamento
+/// aprovado" que não aconteceu de verdade.
+model MarketplacePurchase {
+  id                  String   @id
+  solutionId          String
+  solutionVersionId   String
+  customizationPlanId String?
+  pricingQuoteId      String
+  derivedProjectId    String?
+  derivedMissionId    String?
+  status              String   @default("CONFIRMED")
+  purchasedBy         String   @default("user")
+  createdAt           DateTime @default(now())
+
+  @@index([solutionId, createdAt])
+}
+
+/// MISSÃO "Targeted Generation no Marketplace" — auditoria (Fase 1) confirmou que este sistema
+/// não tem uma camada de artifacts/symbols/código real (nenhum ArtifactRegistry/SymbolManifest/
+/// GenerationRoom em core/ nem no Prisma — o próprio README já documentava isso). O "delta" real
+/// que existe para reaproveitar são as decisões de PLANEJAMENTO já governadas de uma mission de
+/// referência (stack/arquitetura/equipe — Generator.generateTargeted em ldcn-core). Este registro
+/// é o CustomizationImpact + GenerationScope combinados (computados juntos, num único cálculo
+/// real a partir do CustomizationPlan já classificado — nunca dois sistemas fingindo ser
+/// independentes quando não são).
+model MarketplaceGenerationScope {
+  id                            String    @id
+  customizationPlanId           String    @unique
+  solutionId                    String
+  solutionVersionId             String
+  referenceMissionId            String
+  derivedMissionId              String
+  derivedProjectId              String?
+  /// ChangeType[] realmente presentes no plano (COSMETIC..ARCHITECTURAL) — nunca inventado.
+  changeClassesJson             Json      @default("[]")
+  /// Seções do PromptMaster (RequirementSection[]) realmente tocadas por remove/modify/add.
+  affectedSectionsJson          Json      @default("[]")
+  requiresStackReselection      Boolean   @default(false)
+  requiresArchitectureRecompute Boolean   @default(false)
+  requiresTeamRecompute         Boolean   @default(false)
+  /// TARGETED | FULL — FULL quando o impacto é grande demais pra fingir economia (Fase 26).
+  generationMode                String    @default("TARGETED")
+  /// O que o Generator REALMENTE fez (GenerationReuseScope) — pode divergir do pedido acima
+  /// quando uma revalidação real falhou e caiu para recomputação (nunca escondido).
+  actualReuseJson               Json?
+  escalationsJson               Json      @default("[]")
+  /// 0 a 1 — nunca estimado: 1 - (seções afetadas / seções totais do PromptMaster de referência).
+  impactScore                   Float
+  totalRequirements             Int       @default(0)
+  reusedRequirements            Int       @default(0)
+  reason                        String
+  createdAt                     DateTime  @default(now())
+  completedAt                   DateTime?
+
+  @@index([solutionId, createdAt])
+}
+
+/// MISSÃO "Completar o fluxo pós-PromptMaster até geração e entrega real" — auditoria confirmou
+/// que não existia NENHUMA execução real depois do Pipeline (plano) — nem Task Graph, nem
+/// artifacts, nem build, nem test, nem runtime, nem entrega. Este é o registro real de UMA
+/// execução de geração (escopo desta missão: alvo BACKEND, stack.typescript.nestjs — ver
+/// relatório). Nunca marca READY sem `buildJson`/`testJson`/`runtimeJson` preenchidos com
+/// evidência real (exitCode, logs, duração) — status reflete exatamente até onde a pipeline real
+/// chegou, nunca além.
+model MissionGenerationRun {
+  id                      String   @id
+  missionId               String   @unique
+  /// SCAFFOLDING | BUILD_RUNNING | BUILD_FAILED | TEST_RUNNING | TEST_FAILED | RUNTIME_FAILED |
+  /// READY | TARGET_NOT_SUPPORTED — nunca READY sem todas as evidências anteriores presentes.
+  status                  String   @default("SCAFFOLDING")
+  targetKind              String
+  pluginId                String
+  workspacePath           String
+  /// { fileCount, requirementIds[] } — quais Requirements reais viraram quais arquivos.
+  scaffoldJson            Json?
+  /// { command, exitCode, durationMs, logsExcerpt } — nunca fabricado; exitCode real do child process.
+  buildJson               Json?
+  /// { command, total, passed, failed, durationMs, logsExcerpt } — execução real via node:test.
+  testJson                Json?
+  /// { port, healthCheckOk, durationMs, logsExcerpt } — start real + fetch real de /health.
+  runtimeJson             Json?
+  downloadPath            String?
+  errorCode               String?
+  /// MISSÃO "Verificação requisito-por-requisito + Delivery Eligibility" — nunca true só porque
+  /// o build passou; false sempre que algum requirement que estava no escopo desta versão falhou
+  /// de verdade (nunca os que ficaram fora do teto, esses nunca foram prometidos).
+  deliveryEligible        Boolean  @default(false)
+  requirementCoverageJson Json?
+  /// MISSÃO "Security Gate real antes da entrega" — npm audit real + secret scan real (Ferramenta
+  /// mede) + Security Reviewer real sobre código autoral de agente (Agente pensa com LLM). Nunca
+  /// bloqueia por vulnerabilidade herdada de framework abaixo de CRITICAL (isso é uma limitação já
+  /// disclosed do scaffold, não um achado novo desta missão) — só BLOCKER real bloqueia.
+  securityJson            Json?
+  securityPassed          Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+/// Artifact Registry real — um artifact só existe aqui se um arquivo real foi escrito em disco
+/// (hash/sizeBytes calculados do conteúdo real, nunca estimados).
+model GeneratedArtifact {
+  id               String   @id
+  missionId        String
+  generationRunId  String
+  path             String
+  target           String
+  pluginId         String
+  ownerAgent       String
+  version          Int      @default(1)
+  hash             String
+  sizeBytes        Int
+  symbolsJson      Json     @default("[]")
+  importsJson      Json     @default("[]")
+  exportsJson      Json     @default("[]")
+  /// "requirement:<id>" quando derivado de um Requirement real, ou "scaffold" para boilerplate.
+  provenance       String
+  /// SLICE C1: DETERMINISTIC_TEMPLATE | COGNITIVE_AGENT | TOOL_GENERATED — nunca marca artifact
+  /// puramente template como autoria cognitiva. Campo aditivo; `provenance` (acima) continua a
+  /// fonte de verdade textual pré-existente, este é o valor estruturado explícito.
+  provenanceKind   String   @default("DETERMINISTIC_TEMPLATE")
+  validationStatus String   @default("UNVALIDATED")
+  createdAt        DateTime @default(now())
+
+  @@index([missionId, generationRunId])
+}
+
+/// MISSÃO "Arquitetura não pode seguir automaticamente para Entrega" — o gate real entre a
+/// ArchitectureComposition (já determinística, real, produzida por core/ArchitectureComposer) e o
+/// resto da jornada. Um council cognitivo real (LLM) + políticas determinísticas decidem
+/// APPROVED/REWORK_REQUIRED/BLOCKED — nunca um avanço automático e silencioso.
+model ArchitectureReview {
+  id                        String   @id
+  missionId                 String
+  approvedSolutionId        String
+  architectureCompositionId String   @unique
+  reviewMode                String   @default("LEGACY_COMPATIBILITY")
+  status                    String   @default("PENDING")
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([missionId, reviewMode])
+}
+
+model ArchitectureReviewerExecution {
+  id                     String   @id
+  missionId              String
+  architectureReviewId   String
+  reviewerKey            String
+  status                 String
+  provider               String?
+  model                  String?
+  findingCount           Int      @default(0)
+  promptTokens           Int?
+  completionTokens       Int?
+  latencyMs              Int?
+  errorCode              String?
+  attemptCount           Int      @default(0)
+  fallbackUsed           Boolean  @default(false)
+  startedAt              DateTime
+  finishedAt             DateTime
+  agentExecutionId       String?
+  agentDefinitionKey     String?
+  agentDefinitionVersion Int?
+  promptSnapshotId       String?
+  resultHash             String?
+  resultJson             Json?
+
+  @@index([architectureReviewId])
+}
+
+model ArchitectureReviewFinding {
+  id                             String    @id
+  missionId                      String
+  architectureReviewId           String
+  /// chave de reviewer (ex: "solutionArchitect") ou "policy" quando determinístico (Fase: "Agente
+  /// pensa com LLM. Ferramenta mede. Validator verifica. Gate decide.").
+  reviewerKey                    String
+  code                           String
+  severity                       String
+  finding                        String
+  recommendedResolutionsJson     Json      @default("[]")
+  requiresUserDecision           Boolean   @default(false)
+  status                         String    @default("OPEN")
+  resolvedBy                     String?
+  resolvedAt                     DateTime?
+  chosenOption                   String?
+  createdAt                      DateTime  @default(now())
+  reviewerAgentExecutionId       String?
+  reviewerAgentDefinitionKey     String?
+  reviewerAgentDefinitionVersion Int?
+  category                       String?
+  moduleKeysJson                 Json      @default("[]")
+  decisionKeysJson               Json      @default("[]")
+  requirementKeysJson            Json      @default("[]")
+  proposedResolution             String?
+
+  @@index([architectureReviewId])
+}
+
+/// CORE-013 — evidence específica da adjudicação. O ledger/PromptSnapshot/AgentExecution seguem
+/// sendo a fonte de verdade cognitiva; esta linha mantém somente resultado estruturado e refs.
+model ArchitectureArbitration {
+  id                        String   @id
+  missionId                 String
+  architectureCompositionId String   @unique
+  agentExecutionId          String
+  agentDefinitionKey        String
+  agentDefinitionVersion    Int
+  promptSnapshotId          String
+  resultHash                String
+  resultJson                Json
+  verdict                   String
+  unresolvedFindingIdsJson  Json     @default("[]")
+  createdAt                 DateTime @default(now())
+
+  @@index([missionId])
+}
+
+/// MISSÃO "Job Planner + execução por agente cognitivo real" — um Job real por Requirement de
+/// businessRules (hoje ignorado pelo scaffolder determinístico), implementado de verdade por um
+/// AgentInstance que pensa via LLM (nunca um template) — nunca fabricado, nunca "concluído" só
+/// porque o LLM disse que sim: o build/test reais que rodam depois do Job continuam sendo a prova.
+model GenerationJob {
+  id                    String   @id
+  missionId             String
+  generationRunId       String
+  requirementId         String
+  requirementText       String
+  targetResource        String
+  targetFile            String
+  agentKey              String
+  status                String   @default("PENDING")
+  analysisText          String?
+  planText              String?
+  implementationSummary String?
+  provider              String?
+  model                 String?
+  promptTokens          Int?
+  completionTokens      Int?
+  latencyMs             Int?
+  errorCode             String?
+  /// MISSÃO "Repair loop real quando um Job falha" — attemptCount > 1 significa que a 1ª
+  /// tentativa falhou e um reparo real (com o motivo exato incluído no prompt) foi tentado.
+  /// firstAttemptErrorCode nunca é apagado mesmo quando o reparo dá certo — "deu certo" não
+  /// esconde "precisou de reparo".
+  attemptCount          Int      @default(1)
+  firstAttemptErrorCode String?
+  /// MISSÃO "Independent Reviewer agent por Job" — null = reviewer não rodou de verdade (nunca
+  /// confundido com aprovação real); um Job explicitamente reprovado (approved=false) vira FAILED
+  /// e o ChangeSet nunca é aplicado ao workspace, mesmo já tendo passado a validação estrutural.
+  reviewerApproved      Boolean?
+  reviewerFinding       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  /// CORE-005 — auditoria explícita de qual caminho materializou este Job (nunca fallback
+  /// silencioso, doc §22). executionMode: STRUCTURED_COGNITIVE | LEGACY_COMPATIBILITY.
+  /// fallbackReason só é preenchido quando LEGACY_COMPATIBILITY foi escolhido em vez do runtime
+  /// estruturado (ex.: AGENT_NOT_IN_CATALOG, CHANGESET_CONTENT_MISSING, ou o errorCode real do
+  /// AgentRuntime). status/errorCode continuam os mesmos valores de sempre (IMPLEMENTED/FAILED)
+  /// — nenhum enum novo, para não quebrar computeRequirementCoverage.
+  executionMode    String?
+  agentExecutionId String?
+  fallbackReason   String?
+
+  @@index([missionId, generationRunId])
+}
+
+/// MISSÃO "GitHub real (push de verdade)" — credencial única do workspace (mesmo padrão real de
+/// ProviderCredential: criptografada em repouso, nunca em texto puro, um único registro global —
+/// este app não é multi-tenant). Nunca reaproveita ProviderCredential diretamente: aquele modelo é
+/// formatado para provedor de LLM (model, usage por token) — GitHub não tem nada disso.
+model GithubCredential {
+  id             String   @id @default("default")
+  encryptedToken String
+  tokenPreview   String
+  githubLogin    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model GithubPush {
+  id          String   @id
+  missionId   String   @unique
+  status      String   @default("PENDING")
+  repoName    String?
+  repoUrl     String?
+  errorCode   String?
+  /// Sempre escaneado antes de persistir — nunca contém o token (a URL do remote git o embute).
+  logsExcerpt String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// MISSÃO "GitLab real (push de verdade)" — mesmo padrão real já provado pelo GitHub (credencial
+/// única do workspace, criptografada em repouso, validada contra a API real antes de salvar) —
+/// modelo próprio porque a API do GitLab tem forma diferente (PRIVATE-TOKEN em vez de Bearer,
+/// visibility em vez de private:boolean, web_url em vez de html_url).
+model GitlabCredential {
+  id             String   @id @default("default")
+  encryptedToken String
+  tokenPreview   String
+  gitlabUsername String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model GitlabPush {
+  id          String   @id
+  missionId   String   @unique
+  status      String   @default("PENDING")
+  repoName    String?
+  repoUrl     String?
+  errorCode   String?
+  logsExcerpt String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// SLICE C1 "COGNITIVE EXECUTION FOUNDATION" — uma tentativa real de um agente fazer trabalho
+/// cognitivo (Job 1:N AgentExecution). Não é um novo motor de execução: o GenerationEngine
+/// continua orquestrando; isto é só o registro persistente e auditável de cada tentativa.
+/// mode: COGNITIVE | DETERMINISTIC. reason: INITIAL | STRUCTURAL_REPAIR | REVIEW_REWORK |
+/// SECURITY_REWORK | TEST_REWORK | OTHER. status: PENDING | RUNNING | SUCCEEDED | FAILED | CANCELLED.
+/// CORE-004 — agentDefinitionKey/agentDefinitionVersion: versão EXATA do AgentDefVersion
+/// congelada no início da execução cognitiva (nunca re-resolvida depois — invariante §3/§4 do
+/// CORE-004). confidenceScore: min() determinístico dos confidence de cada CognitiveStep bem
+/// sucedido. errorCode: preenchido só quando status=FAILED, nunca genérico ("AGENT_EXECUTION_
+/// FAILED" só quando a causa real não tem código próprio). Todas aditivas — nunca preenchidas
+/// pelo fluxo legado implement()/implementWithRepair() (CORE-001), que continua null nelas.
+model AgentExecution {
+  id              String    @id
+  missionId       String
+  generationRunId String?
+  generationJobId String?
+  agentKey        String
+  mode            String
+  attempt         Int       @default(1)
+  reason          String
+  status          String    @default("PENDING")
+  startedAt       DateTime?
+  completedAt     DateTime?
+  elapsedMs       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  agentDefinitionKey     String?
+  agentDefinitionVersion Int?
+  confidenceScore        Float?
+  errorCode              String?
+
+  /// CORE-005 — AgentRuntime FSM: qual AgentInstance convocou esta execução (null para execuções
+  /// CORE-004 diretas via runStructuredJob(), fora do runtime). heartbeatAt é tocado a cada
+  /// transição de fase (detecção de stale determinística, nunca automática — ver
+  /// AgentRuntimeService.detectStaleExecutions()). cancelRequestedAt/cancelReason: pedido de
+  /// cancelamento é honesto — nunca finge abortar uma chamada LLM já em voo, só impede a
+  /// próxima fase de começar.
+  agentInstanceId          String?
+  heartbeatAt              DateTime?
+  cancelRequestedAt        DateTime?
+  cancelReason             String?
+  reviewRecordId           String?
+  sourceWorkspaceSessionId String?
+
+  @@index([missionId, generationRunId])
+  @@index([generationJobId])
+  @@index([agentInstanceId])
+}
+
+/// CORE-005 — instância mission-scoped de um cargo do catálogo (CORE-002), versão EXATA
+/// congelada. Nesta CORE, criada diretamente por fixtures/testes ou pelo GenerationEngineService
+/// (ensureInstance, idempotente) — TeamComposer (CORE-017) assumirá essa responsabilidade de
+/// forma inteligente no futuro. Uma instância só executa um Job por vez nesta CORE
+/// (currentJobId != null bloqueia novo summon — AGENT_ALREADY_BUSY); múltiplas instâncias do
+/// mesmo cargo permitirão paralelismo futuramente.
+model AgentInstance {
+  id                     String   @id
+  missionId              String
+  agentDefinitionKey     String
+  agentDefinitionVersion Int
+  state                  String   @default("IDLE")
+  currentJobId           String?
+  lastJobId              String?
+  /// CORE-014 — vínculo opcional com a empresa virtual. Instâncias legadas continuam válidas;
+  /// quando o TeamComposer as encontra, ele congela a mesma versão ou rejeita a divergência.
+  virtualCompanyId       String?
+  teamInstanceId         String?
+  role                   String?
+  compositionRationale   String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([missionId, agentDefinitionKey])
+  @@index([missionId])
+  @@index([virtualCompanyId])
+  @@index([teamInstanceId])
+}
+
+/// CORE-005 — timeline operacional real do AgentRuntime (fatos de transição de estado, nunca
+/// chain-of-thought). Distinto do Event Backbone completo (CORE-006, projeção live/SSE) — esta
+/// tabela é só o registro persistente e auditável, consultado via AgentRuntimeService.getTimeline().
+model AgentRuntimeTimelineEvent {
+  id               String   @id
+  missionId        String
+  agentInstanceId  String
+  agentExecutionId String?
+  jobId            String?
+  type             String
+  fromState        String?
+  toState          String?
+  metadataJson     Json     @default("{}")
+  createdAt        DateTime @default(now())
+
+  @@index([agentInstanceId, createdAt])
+  @@index([agentExecutionId])
+}
+
+/// CORE-004 — uma linha por fase cognitiva estruturada (ANALYSIS/PLANNING/IMPLEMENTATION/
+/// SELF_CHECK) de uma AgentExecution. `attempt` é um contador por (agentExecutionId, phase):
+/// 1 = passada normal; 2 = re-execução disparada por SELF_CHECK NEEDS_REPAIR (nunca schema-format
+/// retry — esse é interno a uma única linha, via até 2 LlmInvocationRecord, só o último vinculado
+/// aqui). resultJson/resultHash nunca contêm chain-of-thought — só o structured output validado.
+model AgentCognitiveStep {
+  id               String   @id
+  agentExecutionId String
+  phase            String
+  schemaKey        String
+  schemaVersion    String
+  resultJson       Json
+  resultHash       String
+  promptSnapshotId String?
+  llmInvocationId  String?
+  attempt          Int      @default(1)
+  status           String   @default("RUNNING")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([agentExecutionId, phase, attempt])
+  @@index([agentExecutionId])
+}
+
+/// SLICE C1 — ledger append-only: uma linha por chamada real de LLM, nunca atualizada para
+/// representar outra tentativa. Retry produz uma nova linha, nunca sobrescreve a anterior — é
+/// esta tabela, não GenerationJob.promptTokens/completionTokens (legado/projeção), a fonte de
+/// verdade de tokens/custo. phase (conceito, sem tabela própria): CONTEXT_ANALYSIS | PLANNING |
+/// IMPLEMENTATION_PROPOSAL | SELF_CHECK | EVIDENCE. status: RUNNING | SUCCEEDED | FAILED.
+/// Nunca persiste API key/token/credential em texto puro.
+model LlmInvocationRecord {
+  id                              String    @id
+  missionId                       String
+  agentExecutionId                String?
+  architectureReviewerExecutionId String?
+  purpose                         String
+  phase                           String?
+  provider                        String?
+  model                           String?
+  promptSnapshotId                String?
+  startedAt                       DateTime
+  completedAt                     DateTime?
+  latencyMs                       Int?
+  inputTokens                     Int?
+  outputTokens                    Int?
+  totalTokens                     Int?
+  estimatedCost                   Float?
+  status                          String
+  errorCode                       String?
+  createdAt                       DateTime  @default(now())
+
+  @@index([missionId])
+  @@index([agentExecutionId])
+  @@index([architectureReviewerExecutionId])
+}
+
+/// SLICE C1 — snapshot mínimo e auditável do que foi enviado ao LLM: só hashes e referências,
+/// nunca o texto do prompt em si e nunca chain-of-thought/segredos. promptType/promptVersion/
+/// renderedPromptHash continuam exatamente como estavam (call sites pré-CORE-003 nunca preenchem
+/// as colunas abaixo). CORE-003 — PromptMaster/ContextLoader: colunas aditivas, todas opcionais,
+/// preenchidas somente por PromptMasterService.compile() (LlmInvocationLedgerService.
+/// snapshotCompiledPrompt). agentDefinitionKey/Version e promptTemplateKey/Version sempre
+/// referenciam a versão EXATA usada (nunca "current"). *RefsJson guardam só ids/refs — nunca
+/// conteúdo bruto de artifact/requirement, e nunca credential.
+model PromptSnapshot {
+  id                   String   @id
+  missionId            String
+  jobId                String?
+  agentExecutionId     String?
+  promptType           String
+  promptVersion        String
+  contextHash          String
+  inputVersionRefsJson Json     @default("{}")
+  outputSchemaKey      String?
+  renderedPromptHash   String
+  createdAt            DateTime @default(now())
+
+  agentDefinitionKey     String?
+  agentDefinitionVersion Int?
+  promptTemplateKey      String?
+  promptTemplateVersion  String?
+  purpose                String?
+  compiledPromptHash     String?
+  capabilityRefsJson     Json?
+  knowledgeRefsJson      Json?
+  artifactRefsJson       Json?
+  contractRefsJson       Json?
+  requirementRefsJson    Json?
+
+  @@index([missionId])
+}
+
+// ============================================================
+// CORE-002 — Catálogo Cognitivo Real + Versionamento
+//
+// Catálogo PERMANENTE (nunca pertence a uma Mission): Department > Unit
+// Definition > AgentDefinition (cargo) > AgentDefVersion (versão imutável
+// daquele cargo). AgentInstance/Mission ainda NÃO existem aqui — isso é
+// CORE-003. Nenhum destes models é referenciado ainda por AgentExecution
+// (agentKey em AgentExecution continua uma string livre, resolvida pelo
+// StackRegistry em memória — core/src/registry/stack-registry.ts).
+// ============================================================
+
+model Department {
+  id          String   @id
+  key         String   @unique
+  name        String
+  description String
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UnitDefinition {
+  id              String   @id
+  key             String   @unique
+  departmentId    String
+  name            String
+  engineeringType String
+  stackKeysJson   Json     @default("[]")
+  status          String   @default("ACTIVE")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([departmentId])
+}
+
+model CapabilityDefinition {
+  id          String   @id
+  key         String   @unique
+  domain      String
+  name        String
+  description String
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([domain])
+}
+
+/// AgentDefinition = o cargo permanente (ex: "backend.nestjs.developer").
+/// currentVersion aponta para a última AgentDefVersion publicada — nunca é a
+/// fonte de verdade de uma execução (uma AgentExecution futura deve congelar
+/// a versão exata, nunca depender só de currentVersion — doc CORE-002 §19).
+model AgentDefinition {
+  id               String   @id
+  key              String   @unique
+  unitDefinitionId String
+  currentVersion   Int      @default(0)
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([unitDefinitionId])
+}
+
+/// Versão imutável de um cargo. Uma vez publishedAt preenchido, nenhum campo
+/// pode ser alterado (enforcement em AgentCatalogService, nunca via update
+/// direto do Prisma) — mudança = nova linha com version+1, v_anterior intacta.
+model AgentDefVersion {
+  id                String @id
+  agentDefinitionId String
+  version           Int
+
+  identityJson Json
+  roleMission  String
+
+  capabilityKeysJson Json @default("[]")
+  knowledgeRefsJson  Json @default("[]")
+
+  promptTemplateKey     String
+  promptTemplateVersion String
+
+  outputSchemaKey String
+
+  allowedToolsJson Json @default("[]")
+  territoryJson    Json @default("[]")
+
+  memoryPolicyJson Json @default("{}")
+  reviewPolicyJson Json @default("{}")
+  boundariesJson   Json @default("[]")
+
+  /// { modelClass, maxInputTokens, maxOutputTokens, temperatureProfile, fallbackPolicy } —
+  /// nunca apiKey/secret/credential (doc CORE-002 §21). Resolução real do provider continua no runtime.
+  llmPolicyJson Json?
+
+  canExecute  Boolean @default(false)
+  canReview   Boolean @default(false)
+  canApprove  Boolean @default(false)
+  canDelegate Boolean @default(false)
+
+  /// COGNITIVE | ORCHESTRATION — ORCHESTRATION nunca deve existir para estes
+  /// cargos de engenharia nesta CORE (doc CORE-002 §7); reservado para quando
+  /// serviços determinísticos precisarem de metadata de catálogo no futuro.
+  cognitiveMode String
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([agentDefinitionId, version])
+  @@index([agentDefinitionId])
+}
+
+/// Catálogo de templates versionados. Neste CORE é só CATÁLOGO (não há
+/// PromptMaster runtime, não é renderizado/usado por nenhuma execução ainda).
+model PromptTemplate {
+  id           String    @id
+  key          String
+  version      String
+  sectionsJson Json
+  publishedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([key, version])
+}
+
+/// CORE-006 — EventLog append-only: fluxo de fatos compartilhados da Mission (agent.*, job.*,
+/// llm.*, mission.*), distinto de `DecisionEvent` (event store PRÓPRIO do motor `core/` em
+/// memória — IntelligentGeneratorApplication/HydratedDecisionEventStore — outra aggregate,
+/// outro subsistema, nunca tocado aqui) e distinto de `AgentRuntimeTimelineEvent` (histórico
+/// detalhado de UMA execução — CORE-005). EventLog é o stream que alimenta EventBus/SSE.
+/// NUNCA é source of truth (Mission/Job/AgentInstance/AgentExecution continuam sendo) — só
+/// registra que um fato aconteceu. `sequence` é monotônico por missionId (nunca por timestamp
+/// sozinho — cliente compara sequence). `idempotencyKey` opcional: mesmo fato nunca vira 2 linhas.
+model EventLog {
+  id             String   @id
+  sequence       Int
+  missionId      String
+  correlationId  String
+  causationId    String?
+  actorType      String
+  actorId        String?
+  type           String
+  version        Int      @default(1)
+  payloadJson    Json
+  occurredAt     DateTime
+  createdAt      DateTime @default(now())
+  idempotencyKey String?  @unique
+
+  @@unique([missionId, sequence])
+  @@index([missionId, type])
+  @@index([correlationId])
+}
+
+/// CORE-007 — contrato canônico de escopo de UM GenerationJob. Persistido (nunca só "dentro do
+/// prompt") — PromptMaster (ContextLoader) e ScopeValidator leem exatamente a MESMA linha, nunca
+/// duas fontes divergentes. Sem mutation exposta nesta CORE (nenhum método update no serviço) —
+/// "scope usado por uma execução não muda silenciosamente" (§17) é garantido por simplesmente
+/// nunca existir um caminho de escrita além da criação inicial; expansão de escopo futura vira
+/// nova versão/proposta (CORE futura), nunca update in-place.
+model JobScope {
+  id                     String   @id
+  missionId              String
+  generationJobId        String?  @unique
+  missionJobId           String?  @unique
+  version                Int      @default(1)
+  allowedPathsJson       Json     @default("[]")
+  allowedModulesJson     Json     @default("[]")
+  allowedSymbolsJson     Json     @default("[]")
+  forbiddenPathsJson     Json     @default("[]")
+  requiredContractsJson  Json     @default("[]")
+  acceptanceCriteriaJson Json     @default("[]")
+  /// Hash canônico do conteúdo do scope (doc §16) — a evidência de validação referencia este
+  /// valor exato, nunca "o scope atual" (que poderia, em teoria, ter mudado).
+  scopeHash              String
+  createdAt              DateTime @default(now())
+
+  @@index([missionId])
+}
+
+/// CORE-007 — evidência persistida de UMA validação de ScopeValidator contra UM ChangeSet
+/// específico. `scopeHash`/`changeSetHash` provam contra o quê exatamente a validação rodou —
+/// nunca "o scope mutável no momento". Append-only (nenhuma linha é atualizada depois de criada).
+model JobScopeValidation {
+  id               String   @id
+  missionId        String
+  generationJobId  String
+  agentExecutionId String?
+  jobScopeId       String
+  scopeHash        String
+  changeSetHash    String
+  status           String
+  findingsJson     Json     @default("[]")
+  validatedAt      DateTime @default(now())
+
+  @@index([generationJobId])
+  @@index([missionId])
+}
+
+/// CORE-008 — evidência append-only da inspeção do repositório e validação de duplicidade de um
+/// ChangeSet. Nunca persiste source: somente hashes, paths, nomes de símbolos e ids de candidates.
+model DuplicateValidation {
+  id                    String   @id
+  missionId             String
+  generationJobId       String
+  agentExecutionId      String?
+  changeSetHash         String
+  inspectionHash        String
+  repositoryFingerprint String
+  status                String
+  findingsJson          Json     @default("[]")
+  candidateRefsJson     Json     @default("[]")
+  coverageJson          Json     @default("{}")
+  inspectionsJson       Json     @default("[]")
+  validatedAt           DateTime @default(now())
+
+  @@index([generationJobId])
+  @@index([missionId])
+}
+
+/// CORE-009 — candidato isolado de um Job. `rootRef` aponta para diretório efêmero fora do
+/// workspace canônico; VALIDATED significa apenas build+test verdes, nunca promoção/delivery.
+model WorkspaceSession {
+  id                    String    @id
+  missionId             String
+  generationJobId       String
+  agentExecutionId      String?
+  status                String
+  rootRef               String
+  changeSetHash         String
+  scopeHash             String
+  inspectionHash        String
+  repositoryFingerprint String
+  baselineFingerprint   String
+  candidateFingerprint  String?
+  manifestHash          String?
+  lastHeartbeatAt       DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  completedAt           DateTime?
+  discardedAt           DateTime?
+
+  @@index([generationJobId, changeSetHash, baselineFingerprint])
+  @@index([missionId, status])
+}
+
+model WorkspaceCandidateManifest {
+  id                 String   @id
+  workspaceSessionId String   @unique
+  missionId          String
+  generationJobId    String
+  changeSetHash      String
+  filesJson          Json     @default("[]")
+  manifestHash       String
+  createdAt          DateTime @default(now())
+
+  @@index([missionId])
+}
+
+model BuildValidationRun {
+  id                   String   @id
+  missionId            String
+  generationJobId      String
+  workspaceSessionId   String
+  changeSetHash        String
+  manifestHash         String
+  candidateFingerprint String
+  status               String
+  commandProfile       String
+  startedAt            DateTime
+  completedAt          DateTime
+  elapsedMs            Int
+  exitCode             Int?
+  stdoutHash           String?
+  stderrHash           String?
+  safeSummary          String?
+
+  @@index([workspaceSessionId])
+  @@index([missionId])
+}
+
+/// CORE-010 — resultado de UMA revisão independente sobre um candidato exato (WorkspaceSession
+/// VALIDATED). Nunca `ReviewFinding` (esse é o council de governança do PromptMaster — outro
+/// domínio, auditado e não reaproveitado aqui). `resultHash` prova o CodeReviewResultV1 exato;
+/// `changeSetHash`/`manifestHash`/`candidateFingerprint` provam o candidato exato revisado.
+model ReviewRecord {
+  id                             String   @id
+  missionId                      String
+  generationJobId                String
+  workspaceSessionId             String
+  executorAgentExecutionId       String?
+  executorAgentDefinitionKey     String
+  executorAgentDefinitionVersion Int?
+  reviewerAgentExecutionId       String
+  reviewerAgentDefinitionKey     String
+  reviewerAgentDefinitionVersion Int
+  reviewerAgentInstanceId        String?
+  candidateFingerprint           String
+  manifestHash                   String
+  changeSetHash                  String
+  resultHash                     String
+  verdict                        String
+  reviewCycle                    Int      @default(1)
+  confidence                     Float
+  summary                        String
+  requirementAssessmentJson      Json     @default("[]")
+  promptSnapshotId               String?
+  llmInvocationId                String?
+  createdAt                      DateTime @default(now())
+
+  @@unique([workspaceSessionId, candidateFingerprint, reviewCycle])
+  @@index([generationJobId])
+  @@index([missionId])
+  @@index([workspaceSessionId])
+}
+
+/// Finding individual de uma revisão — nunca persiste source completo, só path/categoria/
+/// severidade/mensagem segura e requirement refs.
+model CodeReviewFinding {
+  id                 String   @id
+  reviewRecordId     String
+  missionId          String
+  category           String
+  severity           String
+  path               String?
+  message            String
+  requirementIdsJson Json     @default("[]")
+  createdAt          DateTime @default(now())
+
+  @@index([reviewRecordId])
+  @@index([missionId])
+}
+
+model TestValidationRun {
+  id                   String   @id
+  missionId            String
+  generationJobId      String
+  workspaceSessionId   String
+  changeSetHash        String
+  manifestHash         String
+  candidateFingerprint String
+  status               String
+  commandProfile       String
+  startedAt            DateTime
+  completedAt          DateTime
+  elapsedMs            Int
+  exitCode             Int?
+  passedCount          Int?
+  failedCount          Int?
+  skippedCount         Int?
+  stdoutHash           String?
+  stderrHash           String?
+  safeSummary          String?
+
+  @@index([workspaceSessionId])
+  @@index([missionId])
 }

@@ -34,7 +34,7 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     await missionPersistence.flush(missionId, session);
   }
 
-  it('listMissions() includes a freshly generated mission, most recent first', async () => {
+  it('listMissions() includes a freshly generated mission, sorted most-recent-first', async () => {
     const missionId = `test-${randomUUID()}`;
     try {
       await seedMission(missionId, 'quero uma landing page');
@@ -45,7 +45,12 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
       expect(found?.rawUserIdea).toBe('quero uma landing page');
       expect(found?.nextAction).toBe('START_EXECUTION');
       expect(found?.blockers).toEqual([]);
-      expect(summaries[0].missionId).toBe(missionId);
+      // Not "at index 0" — this suite shares the real Postgres tables with other test files that
+      // may write missions concurrently (e.g. discovery.service.test.ts), so only the ordering
+      // *property* is guaranteed, not exclusive access to the table.
+      for (let i = 1; i < summaries.length; i++) {
+        expect(summaries[i - 1].updatedAt.getTime()).toBeGreaterThanOrEqual(summaries[i].updatedAt.getTime());
+      }
     } finally {
       await cleanup(missionId);
     }

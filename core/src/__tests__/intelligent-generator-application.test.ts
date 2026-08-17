@@ -106,4 +106,31 @@ describe('IntelligentGenerator application services', () => {
     expect(response.runtimeTasks).toEqual([]);
     expect(response.repairTasks).toEqual([]);
   });
+
+  // MISSÃO "Targeted Generation" — mesmas garantias reais do generate() (idempotência real,
+  // trilha de decision events), aplicadas ao comando de reuso.
+  it('generateTargeted is retry-safe, marks reused decision events, and rejects a conflicting scope for the same mission', () => {
+    const service = new IntelligentGeneratorCommandService();
+    // Mesmo rawUserIdea (só o missionId muda) garante a mesma topologia/stack da referência — o
+    // objetivo deste teste é a mecânica do evento (`reused: true`), não a heurística de impacto
+    // (essa é coberta por generator-targeted.test.ts, inclusive o caso de escalation real).
+    const rawUserIdea = 'Quero um sistema de gestão de clínica com login e dashboard.';
+    const reference = service.generate({ missionId: 'targeted-reference', rawUserIdea });
+    const scope = { reuseStackSelection: true, reuseArchitecture: true, reuseTeam: true };
+    const input = { missionId: 'targeted-derived', rawUserIdea };
+
+    const first = service.generateTargeted(input, reference, scope);
+    const retry = service.generateTargeted(input, reference, scope);
+    expect(retry).toBe(first);
+
+    const solutionEvent = service.getEvents('targeted-derived').find((e) => e.eventType === 'SOLUTION_APPROVED');
+    expect(solutionEvent?.payload).toEqual({ reused: true });
+    const architectureEvent = service.getEvents('targeted-derived').find((e) => e.eventType === 'ARCHITECTURE_DECIDED');
+    expect(architectureEvent?.payload).toEqual({ reused: true });
+    const teamEvent = service.getEvents('targeted-derived').find((e) => e.eventType === 'TEAM_COMPOSED');
+    expect(teamEvent?.payload).toEqual({ reused: true });
+
+    // Mesma mission, mesmo input, scope diferente -> comando genuinamente diferente, nunca um cache incorreto.
+    expect(() => service.generateTargeted(input, reference, { reuseStackSelection: false, reuseArchitecture: true, reuseTeam: true })).toThrow('GENERATOR_COMMAND_CONFLICT');
+  });
 });

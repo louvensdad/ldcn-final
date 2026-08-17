@@ -37,3 +37,4 @@ export * from './runtime-policy';
 export * from './runtime-api-contract';
 export * from './predictions';
 export * from './next-action';
+export * from './generation-reuse-scope';

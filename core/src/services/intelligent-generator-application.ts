@@ -1,5 +1,5 @@
-import { Generator, GenerationResult } from '../generator';
-import { GeneratorOverview, GeneratorMissionState, IntentInput, LearningOutcome, ReplanReason } from '../domain';
+import { Generator, GenerationResult, TargetedGenerationResult } from '../generator';
+import { GeneratorOverview, GeneratorMissionState, GenerationReuseScope, IntentInput, LearningOutcome, ReplanReason } from '../domain';
 import { DecisionEventRepository, InMemoryDecisionEventStore } from './decision-event-store';
 import { GeneratorStateMachine } from './generator-state-machine';
 import { PipelineReadModel } from './pipeline-read-model';
@@ -49,6 +49,48 @@ export class IntelligentGeneratorCommandService {
       this.events.append({ missionId: input.missionId, eventType: 'SOLUTION_APPROVED', aggregateType: 'ApprovedSolution', aggregateId: result.approvedSolution.id, idempotencyKey: `solution:${input.missionId}:${result.approvedSolution.version}` }),
       this.events.append({ missionId: input.missionId, eventType: 'ARCHITECTURE_DECIDED', aggregateType: 'ApprovedArchitectureComposition', aggregateId: result.architectureComposition.id, idempotencyKey: `architecture:${input.missionId}:${result.architectureComposition.version}` }),
       this.events.append({ missionId: input.missionId, eventType: 'TEAM_COMPOSED', aggregateType: 'AgentTeam', aggregateId: result.agentTeam.id, idempotencyKey: `team:${input.missionId}:${result.agentTeam.version}` }),
+      this.events.append({ missionId: input.missionId, eventType: 'PIPELINE_COMPOSED', aggregateType: 'MissionPipelinePlan', aggregateId: result.pipeline.id, idempotencyKey: `pipeline:${input.missionId}:${result.pipeline.version}` }),
+    ];
+    for (const event of recorded) this.tracer.audit({ traceId: event.id, missionId: event.missionId, eventType: event.eventType, stage: this.stageFor(event.eventType), entityId: event.aggregateId, entityVersion: event.version });
+    const stateEvent = this.events.append({ missionId: input.missionId, eventType: 'GENERATOR_STATE_CHANGED', aggregateType: 'GeneratorMissionState', aggregateId: input.missionId, idempotencyKey: `state:${input.missionId}:${finalState.version}`, payload: { state: finalState.state, version: finalState.version } });
+    this.tracer.audit({ traceId: stateEvent.id, missionId: input.missionId, eventType: stateEvent.eventType, stage: 'pipeline', entityId: stateEvent.aggregateId, entityVersion: stateEvent.version, attributes: { state: finalState.state } });
+    return result;
+  }
+
+  /**
+   * MISSÃO "Targeted Generation" — mesmo padrão real de `generate()` (idempotência por
+   * fingerprint, trilha real de decision events), mas o fingerprint também cobre a `reference` e o
+   * `scope` pedido: a MESMA mission com um scope diferente é um comando genuinamente diferente,
+   * nunca um cache incorreto. Cada evento de decisão que veio de reuso carrega `reused: true` no
+   * payload — a trilha de auditoria nunca esconde o que foi reaproveitado vs recomputado
+   * (Fase 33/41 do brief: checkpoints e métricas nunca inferidos depois, sempre registrados aqui).
+   */
+  generateTargeted(input: IntentInput, reference: GenerationResult, scope: GenerationReuseScope): TargetedGenerationResult {
+    const stored = this.results.get(input.missionId) ? undefined : this.resultRepository.get(input.missionId);
+    if (stored) this.results.set(input.missionId, stored.result), this.commandFingerprints.set(input.missionId, stored.fingerprint);
+    const existing = this.results.get(input.missionId);
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify({ input, referenceApprovedSolutionId: reference.approvedSolution.id, referenceArchitectureId: reference.architectureComposition.id, referenceTeamId: reference.agentTeam.id, scope }))
+      .digest('hex');
+    if (existing) {
+      if (this.commandFingerprints.get(input.missionId) !== fingerprint) throw new Error('GENERATOR_COMMAND_CONFLICT');
+      return existing as TargetedGenerationResult;
+    }
+    const result = this.generator.generateTargeted(input, reference, scope);
+    this.results.set(input.missionId, result);
+    this.commandFingerprints.set(input.missionId, fingerprint);
+    this.resultRepository.save(input.missionId, { fingerprint, result });
+
+    const executable = result.approvedSolution.selectedStacks.length > 0 && result.pipeline.nodes.length > 0;
+    const finalState = this.advanceState(input.missionId, result.governance.allowed && executable);
+    const recorded = [
+      this.events.append({ missionId: input.missionId, eventType: 'INTENT_ANALYZED', aggregateType: 'ProjectIntent', aggregateId: result.intent.id, idempotencyKey: `intent:${input.missionId}:${result.intent.version}` }),
+      this.events.append({ missionId: input.missionId, eventType: 'REQUIREMENTS_APPROVED', aggregateType: 'RequirementsContract', aggregateId: result.contract.id, idempotencyKey: `requirements:${input.missionId}:${result.contract.version}` }),
+      this.events.append({ missionId: input.missionId, eventType: 'TOPOLOGY_APPROVED', aggregateType: 'SolutionTopology', aggregateId: result.topology.id, idempotencyKey: `topology:${input.missionId}:${result.topology.version}` }),
+      ...result.approvedSolution.selectedStacks.map((selection) => this.events.append({ missionId: input.missionId, eventType: 'STACK_SELECTED' as const, aggregateType: 'ApprovedStackSelection', aggregateId: selection.stackKey, idempotencyKey: `stack:${input.missionId}:${selection.deliveryTargetKind}:${result.approvedSolution.version}`, payload: { deliveryTargetKind: selection.deliveryTargetKind, stackKey: selection.stackKey, reused: result.actualReuse.reuseStackSelection } })),
+      this.events.append({ missionId: input.missionId, eventType: 'SOLUTION_APPROVED', aggregateType: 'ApprovedSolution', aggregateId: result.approvedSolution.id, idempotencyKey: `solution:${input.missionId}:${result.approvedSolution.version}`, payload: { reused: result.actualReuse.reuseStackSelection } }),
+      this.events.append({ missionId: input.missionId, eventType: 'ARCHITECTURE_DECIDED', aggregateType: 'ApprovedArchitectureComposition', aggregateId: result.architectureComposition.id, idempotencyKey: `architecture:${input.missionId}:${result.architectureComposition.version}`, payload: { reused: result.actualReuse.reuseArchitecture } }),
+      this.events.append({ missionId: input.missionId, eventType: 'TEAM_COMPOSED', aggregateType: 'AgentTeam', aggregateId: result.agentTeam.id, idempotencyKey: `team:${input.missionId}:${result.agentTeam.version}`, payload: { reused: result.actualReuse.reuseTeam } }),
       this.events.append({ missionId: input.missionId, eventType: 'PIPELINE_COMPOSED', aggregateType: 'MissionPipelinePlan', aggregateId: result.pipeline.id, idempotencyKey: `pipeline:${input.missionId}:${result.pipeline.version}` }),
     ];
     for (const event of recorded) this.tracer.audit({ traceId: event.id, missionId: event.missionId, eventType: event.eventType, stage: this.stageFor(event.eventType), entityId: event.aggregateId, entityVersion: event.version });

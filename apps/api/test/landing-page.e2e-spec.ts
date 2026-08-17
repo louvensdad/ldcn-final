@@ -19,6 +19,10 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
   let prisma: PrismaService;
   let missionId: string;
 
+  function api(method: 'get' | 'post', path: string) {
+    return request(app.getHttpServer())[method](path).set('x-api-key', process.env.LDCN_API_KEY ?? '');
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -37,14 +41,13 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
   it('produces a non-empty, READY_FOR_EXECUTION solution for "quero uma landing page"', async () => {
     missionId = `e2e-landing-${randomUUID()}`;
 
-    const start = await request(app.getHttpServer())
-      .post(`/missions/${missionId}/intelligent-generator/start`)
+    const start = await api('post', `/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero uma landing page' })
       .expect(202);
     expect(start.body).toMatchObject({ missionId, status: 'SUCCEEDED' });
     expect(typeof start.body.operationId).toBe('string');
 
-    const operation = await request(app.getHttpServer()).get(`/operations/${start.body.operationId}`).expect(200);
+    const operation = await api('get', `/operations/${start.body.operationId}`).expect(200);
     expect(operation.body.status).toBe('SUCCEEDED');
     const result = operation.body.resultJson;
     expect(result.approvedSolution.deliveryTargets.some((t: { kind: string }) => t.kind === 'FRONTEND')).toBe(true);
@@ -53,12 +56,12 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     expect(result.pipeline.nodes.length).toBeGreaterThan(0);
     expect(result.governance.allowed).toBe(true);
 
-    const overview = await request(app.getHttpServer()).get(`/missions/${missionId}/intelligent-generator`).expect(200);
+    const overview = await api('get', `/missions/${missionId}/intelligent-generator`).expect(200);
     expect(overview.body.status).toBe('READY_FOR_EXECUTION');
     expect(overview.body.approvedStackCount).toBeGreaterThan(0);
     expect(overview.body.pipelineNodeCount).toBeGreaterThan(0);
 
-    const missionOverview = await request(app.getHttpServer()).get(`/missions/${missionId}/overview`).expect(200);
+    const missionOverview = await api('get', `/missions/${missionId}/overview`).expect(200);
     expect(missionOverview.body.solutionSummary.selectedStackCount).toBeGreaterThan(0);
     expect(missionOverview.body.teamSummary.instanceCount).toBeGreaterThan(0);
     expect(missionOverview.body.pipelineSummary.nodeCount).toBeGreaterThan(0);
@@ -66,17 +69,15 @@ const RUN_DB_TESTS = process.env.LDCN_TEST_DATABASE_URL || process.env.DATABASE_
     expect(missionOverview.body.blockers).toEqual([]);
     expect(missionOverview.body.currentOperation.id).toBe(start.body.operationId);
 
-    const missionList = await request(app.getHttpServer()).get('/missions').expect(200);
+    const missionList = await api('get', '/missions').expect(200);
     const listed = missionList.body.find((mission: { missionId: string }) => mission.missionId === missionId);
     expect(listed).toMatchObject({ missionId, rawUserIdea: 'quero uma landing page', nextAction: 'START_EXECUTION', blockers: [] });
 
-    await request(app.getHttpServer())
-      .post(`/missions/${missionId}/intelligent-generator/start`)
+    await api('post', `/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero uma landing page' })
       .expect(202);
 
-    await request(app.getHttpServer())
-      .post(`/missions/${missionId}/intelligent-generator/start`)
+    await api('post', `/missions/${missionId}/intelligent-generator/start`)
       .send({ rawUserIdea: 'quero um app totalmente diferente' })
       .expect(409);
   });

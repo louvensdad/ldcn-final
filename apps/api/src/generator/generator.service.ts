@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DeliveryTargetKind, GeneratorDecisionEventType, IntelligentGeneratorQueryService } from 'ldcn-core';
+import { DeliveryTargetKind, GenerationReuseScope, GeneratorDecisionEventType, IntelligentGeneratorQueryService } from 'ldcn-core';
 import { MissionPersistenceService } from '../persistence/mission-persistence.service';
 import { OperationPersistenceService } from '../operations/operation-persistence.service';
 import { EventBusService } from '../events/event-bus.service';
@@ -16,6 +16,13 @@ export interface StartMissionAccepted {
   operationId: string;
   missionId: string;
   status: 'SUCCEEDED' | 'FAILED';
+}
+
+/** MISSÃO "Targeted Generation" — o mesmo `StartMissionAccepted`, mais o que realmente foi
+ * reaproveitado vs recomputado (nunca inferido depois — sempre o registro real do Generator). */
+export interface StartTargetedMissionAccepted extends StartMissionAccepted {
+  actualReuse: GenerationReuseScope;
+  escalations: { stage: string; reason: string }[];
 }
 
 @Injectable()
@@ -57,6 +64,46 @@ export class GeneratorService {
       this.eventBus.emit('pipeline.updated', { pipelineId: result.pipeline.id, nodeCount: result.pipeline.nodes.length }, { missionId, operationId: operation.id });
 
       return { operationId: operation.id, missionId, status: 'SUCCEEDED' };
+    } catch (error) {
+      const errorCode = error instanceof Error ? error.message : 'INTERNAL_ERROR';
+      await this.operations.fail(operation.id, errorCode);
+      this.eventBus.emit('operation.failed', { errorCode }, { missionId, operationId: operation.id });
+      throw error;
+    }
+  }
+
+  /**
+   * MISSÃO "Targeted Generation no Marketplace" — mesmo Operation pattern e mesmos eventos de
+   * `start()` (nunca um caminho paralelo de verdade); a única diferença real é chamar
+   * `generateTargeted` em vez de `generate`, reaproveitando as decisões já governadas da mission
+   * de referência quando o `scope` permitir. `referenceMissionId` precisa ter um GenerationResult
+   * real e persistido — a mesma exigência que `MarketplaceSolutionService.createVersionFromMission`
+   * já faz.
+   */
+  async startTargeted(missionId: string, input: StartMissionInput, referenceMissionId: string, scope: GenerationReuseScope): Promise<StartTargetedMissionAccepted> {
+    if (!missionId?.trim()) throw new Error('MISSION_ID_REQUIRED');
+    if (!input || typeof input.rawUserIdea !== 'string' || !input.rawUserIdea.trim()) throw new Error('INVALID_INTENT_INPUT');
+
+    const referenceSession = await this.missionPersistence.hydrate(referenceMissionId);
+    const referenceStored = referenceSession.resultStore.getCurrent();
+    if (!referenceStored) throw new Error('MARKETPLACE_REFERENCE_MISSION_NOT_GENERATED');
+
+    const correlationId = randomUUID();
+    const operation = await this.operations.create(missionId, 'GENERATE_MISSION', correlationId);
+    this.eventBus.emit('operation.started', { type: 'GENERATE_MISSION' }, { missionId, operationId: operation.id });
+
+    try {
+      const session = await this.missionPersistence.hydrate(missionId);
+      const result = session.commands.generateTargeted({ missionId, ...input }, referenceStored.result, scope);
+      await this.missionPersistence.flush(missionId, session);
+      await this.operations.succeed(operation.id, result);
+
+      this.eventBus.emit('operation.completed', { approvedSolutionId: result.approvedSolution.id }, { missionId, operationId: operation.id });
+      this.eventBus.emit('mission.state.changed', { allowed: result.governance.allowed }, { missionId, operationId: operation.id });
+      this.eventBus.emit('team.composed', { teamId: result.agentTeam.id, instanceCount: result.agentTeam.instances.length }, { missionId, operationId: operation.id });
+      this.eventBus.emit('pipeline.updated', { pipelineId: result.pipeline.id, nodeCount: result.pipeline.nodes.length }, { missionId, operationId: operation.id });
+
+      return { operationId: operation.id, missionId, status: 'SUCCEEDED', actualReuse: result.actualReuse, escalations: result.escalations };
     } catch (error) {
       const errorCode = error instanceof Error ? error.message : 'INTERNAL_ERROR';
       await this.operations.fail(operation.id, errorCode);

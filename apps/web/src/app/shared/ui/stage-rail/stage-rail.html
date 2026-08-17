@@ -1,8 +1,0 @@
-<ol class="stage-rail">
-  @for (stage of stages; track stage.key) {
-    <li class="stage-rail__stop" [class]="'stage-rail__stop--' + status(stage)">
-      <span class="stage-rail__dot"></span>
-      <span class="stage-rail__label">{{ stage.labelKey | translate }}</span>
-    </li>
-  }
-</ol>

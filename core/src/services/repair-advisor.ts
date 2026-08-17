@@ -58,6 +58,12 @@ export class RepairAdvisor {
     const contextHash = createHash('sha256').update(JSON.stringify({ missionId: input.missionId, taskId: input.taskId, approvedSolutionId: input.approvedSolutionId, failureCode: input.failureCode, failureSummary: input.failureSummary, affectedStack: input.affectedStack, failedGateKey: input.failedGateKey })).digest('hex');
     const existing = this.repository.findByContextHash(contextHash);
     if (existing) return existing;
-    return this.repository.save({ id: generateId(), missionId: input.missionId, version: 1, taskId: input.taskId, failureSnapshotId: input.failureSnapshotId, approvedSolutionId: input.approvedSolutionId, failureCode: input.failureCode, likelyCapabilities, likelySpecialistRole, estimatedSuccess, risk, rationale: `Advisory baseado no padrão determinístico da falha${input.affectedStack ? ` na stack ${input.affectedStack}` : ''}.`, status: 'ADVISORY_ONLY', contextHash });
+    // Deterministic composition from the fields already computed above — no LLM involved, this
+    // just stops discarding what advise() already knows (previously a fixed generic sentence).
+    const historyNote = relevant.length > 0
+      ? `com base em ${relevant.length} reparo(s) anterior(es) do mesmo tipo de falha (taxa de sucesso estimada: ${Math.round(estimatedSuccess * 100)}%)`
+      : 'sem histórico de reparos anteriores para esse tipo de falha (taxa de sucesso estimada neutra: 50%)';
+    const rationale = `Falha "${input.failureCode}"${input.affectedStack ? ` na stack ${input.affectedStack}` : ''} indica necessidade de ${likelySpecialistRole}, com foco em ${likelyCapabilities.join(' e ')}. Risco classificado como ${risk}, ${historyNote}.`;
+    return this.repository.save({ id: generateId(), missionId: input.missionId, version: 1, taskId: input.taskId, failureSnapshotId: input.failureSnapshotId, approvedSolutionId: input.approvedSolutionId, failureCode: input.failureCode, likelyCapabilities, likelySpecialistRole, estimatedSuccess, risk, rationale, status: 'ADVISORY_ONLY', contextHash });
   }
 }

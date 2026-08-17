@@ -28,4 +28,9 @@ export class AssistantController {
   explainRouting(@Param('missionId') missionId: string, @Body() body: ExplainRoutingInput) {
     return this.assistant.explainRoutingDecision(missionId, body.taskId);
   }
+
+  @Post('explain-repair')
+  explainRepair(@Param('missionId') missionId: string, @Body() body: ExplainRoutingInput) {
+    return this.assistant.explainRepairAdvisory(missionId, body.taskId);
+  }
 }

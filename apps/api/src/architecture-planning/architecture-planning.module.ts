@@ -1,0 +1,5 @@
+import { Module } from '@nestjs/common';
+import { AssistantModule } from '../assistant/assistant.module'; import { ApprovalsModule } from '../approvals/approvals.module'; import { CatalogModule } from '../catalog/catalog.module'; import { EventsModule } from '../events/events.module'; import { LedgerModule } from '../ledger/ledger.module'; import { PersistenceModule } from '../persistence/persistence.module'; import { PromptMasterModule } from '../promptmaster/promptmaster.module'; import { RequirementsModule } from '../requirements/requirements.module';
+import { ArchitecturePlanningController } from './architecture-planning.controller'; import { ArchitecturePlanningService } from './architecture-planning.service';
+@Module({imports:[PersistenceModule,AssistantModule,ApprovalsModule,CatalogModule,EventsModule,LedgerModule,PromptMasterModule,RequirementsModule],controllers:[ArchitecturePlanningController],providers:[ArchitecturePlanningService],exports:[ArchitecturePlanningService]})
+export class ArchitecturePlanningModule {}
